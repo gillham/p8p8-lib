@@ -94,8 +94,13 @@ nothing more is claimed for those.
 
 - `common/shared_aligned_long_arena.p8`, `common/shared_hosted_compression.p8`:
   new shared modules.
+- `targets/gametank/audio_fw.bin.rle`: the GameTank's audio firmware, from
+  the GameTank SDK by Clyde Shaffer, included with his permission.  It is not
+  under this repository's license; see `targets/gametank/NOTICE.md`.
 
 ## License
 
 GPLv3 with Prog8's exception for the output of the compiler; see `LICENSE`.
+One file is someone else's and has its own terms:
+`targets/gametank/NOTICE.md`.
 Prog8 and its library are by Irmen de Jong, <https://github.com/irmen/prog8>.
