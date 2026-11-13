@@ -56,6 +56,24 @@ do not have comes from Prog8's library unchanged.
 - Files that a machine's startup code includes (`.include "startup.asm"`) are
   found in its directory as well.
 
+## The state of the targets
+
+How far each one has been tried with p8p8.  "Builds" means that test programs
+compile and assemble, with p8p8 and with the reference compiler's LLVM branch;
+nothing more is claimed for those.
+
+| Target | State |
+|---|---|
+| `c64`, `c128`, `cx16`, `pet32` | programs built by p8p8 are compared with the reference compiler's in emulators (C64, X16), and real programs have been run on all four |
+| `plus4`, `vic20plus8`, `mega65`, `f256`, `gametank` | a real program (a game) built by p8p8 has been run on each |
+| `llvm64` | p8p8 itself is built for it; compared with the reference compiler on macOS, Linux and Windows |
+| `llvm32`, `llvm16` | test programs compared with the reference compiler (WebAssembly, the llvm-mos simulator and the C64) |
+| `virtual` | test programs compared in the reference compiler's virtual machine |
+| `vic20`, `vic20plus3`, `vic20plus24`, `cx16os`, `mc64`, `sim6502` | builds; not run |
+| `atari`, `rp6502`, `w65c816sxb` | builds, for a program with `%launcher none` (these have no BASIC launcher); not run |
+| `c64os` | does not build, with either compiler: its modules are older than the standard library they sit on |
+| `m68k`, `mecb68k`, `mecb68k-mame`, and upstream's `amiga500`, `amiga1200`, `qemu68k` | 68000 machines: p8p8 has no code generator for them.  They are here for the reference compiler's LLVM branch |
+
 ## What is here that is not upstream's
 
 - `targets/llvm64`, `llvm32`, `llvm16`: the library of the LLVM targets.
