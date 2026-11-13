@@ -71,8 +71,8 @@ nothing more is claimed for those.
 | `virtual` | test programs compared in the reference compiler's virtual machine |
 | `vic20`, `vic20plus3`, `vic20plus24`, `cx16os`, `mc64`, `sim6502` | builds; not run |
 | `atari`, `rp6502`, `w65c816sxb` | builds, for a program with `%launcher none` (these have no BASIC launcher); not run |
-| `c64os` | does not build, with either compiler: its modules are older than the standard library they sit on |
-| `m68k`, `mecb68k`, `mecb68k-mame`, and upstream's `amiga500`, `amiga1200`, `qemu68k` | 68000 machines: p8p8 has no code generator for them.  They are here for the reference compiler's LLVM branch |
+| `c64os` | **broken, being worked on**: does not build with either compiler, because its modules are older than the standard library they sit on |
+| upstream's `amiga500`, `amiga1200`, `qemu68k` | 68000 machines: p8p8 has no code generator for them yet, so they can only be checked, not built.  Custom 68000 targets are left out of this library until it has one |
 
 ## What is here that is not upstream's
 
