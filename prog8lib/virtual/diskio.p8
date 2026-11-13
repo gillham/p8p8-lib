@@ -1,0 +1,340 @@
+; File I/O routines for the VM target
+;
+; NOTE: not all is implemented.
+; NOTE: some calls are slightly different from the "official" diskio library because for example,
+;       here we cannot deal with multiple return values.
+
+%import textio
+%import syslib
+
+diskio {
+    %option no_symbol_prefixing, ignore_unused
+
+    sub directory() -> bool {
+        ; -- Prints the directory contents to the screen. Returns success.
+        %ir {{
+            syscall 45 (): r99100.b
+            returnr.b r99100.b
+        }}
+    }
+
+    sub diskname() -> str {
+        ; -- Returns the name of the virtual disk/filesystem.
+        return "host-filesystem"
+    }
+
+    sub directory_dirs() -> bool {
+        ; -- Prints all directory entries (subdirectories) to the screen. Returns success.
+        ;    STUB: not implemented in virtual target, just calls directory()
+        txt.print("NOTE: directory_dirs() not yet implemented on virtual target - returning regular directory.\n")
+        return directory()
+    }
+
+    sub directory_files() -> bool {
+        ; -- Prints all file entries to the screen. Returns success.
+        ;    STUB: not implemented in virtual target, just calls directory()
+        txt.print("NOTE: directory_files() not yet implemented on virtual target - returning regular directory.\n")
+        return directory()
+    }
+
+    ; the VM version of diskio has no facility to iterate over filenames.
+    ; (list_filenames, lf_start_list, lf_next_entry, lf_end_list)
+
+
+    ; ----- iterative file loader functions (uses the input io channel) -----
+
+    sub f_open(str filenameptr) -> bool {
+        ; -- open a file for iterative reading with f_read
+        ;    note: only a single iteration loop can be active at a time!
+        ;    Returns true if the file is successfully opened and readable.
+        ;    No need to check status(), unlike f_open_w() !
+        ;    NOTE: the default input isn't yet set to this logical file, you must use reset_read_channel() to do this,
+        ;          if you're going to read from it yourself instead of using f_read()!
+
+        %ir {{
+            loadm.l r99200.l,[diskio.f_open.filenameptr]
+            syscall 52 (r99200.l): r99100.b
+            returnr.b r99100.b
+        }}
+    }
+
+    sub f_read(str bufferpointer, uword num_bytes) -> uword {
+        ; -- read from the currently open file, up to the given number of bytes.
+        ;    returns the actual number of bytes read.  (checks for End-of-file and error conditions)
+        uword actual
+        repeat num_bytes {
+            %ir {{
+                syscall 54 (): r99000.w
+                storem.w r99000.w,[$ff0000]
+            }}
+            if cx16.r0H==0
+                return actual
+            @(bufferpointer) = cx16.r0L
+            bufferpointer++
+            actual++
+        }
+        return actual
+    }
+
+    sub f_read_all(str bufferpointer) -> uword {
+        ; -- read the full rest of the file, returns number of bytes read.
+        ;    It is assumed the file size is less than 64 K.
+        ;    Usually you will just be using load() / load_raw() to read entire files!
+        uword actual
+        repeat {
+            %ir {{
+                syscall 54 (): r99000.w
+                storem.w r99000.w,[$ff0000]
+            }}
+            if cx16.r0H==0
+                return actual
+            @(bufferpointer) = cx16.r0L
+            bufferpointer++
+            actual++
+        }
+    }
+
+    sub f_readline(str bufptr) -> ubyte {
+        ; Routine to read text lines from a text file. Lines must be less than 255 characters.
+        ; Reads characters from the input file UNTIL a newline or return character, or 0 byte (likely EOF).
+        ; The line read will be 0-terminated in the buffer (and not contain the end of line character).
+        ; The length of the line is returned. Note that an empty line is okay and is length 0!
+        ; The success status is returned in the Carry flag instead: C set = success, C clear = failure/endoffile
+        ubyte size
+        repeat {
+            %ir {{
+                syscall 54 (): r99000.w
+                storem.w r99000.w,[$ff0000]
+            }}
+
+            if cx16.r0H==0 {
+                sys.clear_carry()
+                return size
+            } else {
+                if cx16.r0L in ['\n', '\r', 0] {
+                    @(bufptr) = 0
+                    sys.set_carry()
+                    return size
+                }
+                @(bufptr) = cx16.r0L
+                bufptr++
+                size++
+                if size == 0 {
+                    @(bufptr) = 0
+                    return 255
+                }
+            }
+        }
+    }
+
+    sub f_close() {
+        ; -- end an iterative file loading session (close channels).
+        ;    it is safe to call this multiple times, or when no file is open for reading.
+        %ir {{
+            syscall 56 ()
+        }}
+    }
+
+
+    ; ----- iterative file writing functions (uses write io channel) -----
+
+    sub f_open_w(str filenameptr) -> bool {
+        ; -- open a file for iterative writing with f_write
+        ;    WARNING: returns true if the open command was received by the device,
+        ;    but this can still mean the file wasn't successfully opened for writing!
+        ;    (for example, if it already exists). This is different than f_open()!
+        ;    To be 100% sure if this call was successful, you have to use status()
+        ;    and check the drive's status message!
+        %ir {{
+            loadm.l r99200.l,[diskio.f_open_w.filenameptr]
+            syscall 53 (r99200.l): r99100.b
+            returnr.b r99100.b
+        }}
+    }
+
+    sub f_write(str bufferpointer, uword num_bytes) -> bool {
+        ; -- write the given number of bytes to the currently open file
+        ;    you can call this multiple times to append more data
+        repeat num_bytes {
+            %ir {{
+                loadm.w r99000.w,[diskio.f_write.bufferpointer]
+                loadi.b r99100.b,[r99000.w]
+                syscall 55 (r99100.b): r99101.b
+                storem.b r99101.b,[$ff0000]
+            }}
+            if cx16.r0L==0
+                return false
+            bufferpointer++
+        }
+        return true
+    }
+
+    sub f_close_w() {
+        ; -- end an iterative file writing session (close channels).
+        ;    it is safe to call this multiple times, or when no file is open for reading.
+        %ir {{
+            syscall 57 ()
+        }}
+    }
+
+
+    ; ---- other functions ----
+
+    sub chdir(str path) {
+        ; -- change current directory.
+        %ir {{
+            loadm.l r99200.l,[diskio.chdir.path]
+            syscall 50 (r99200.l)
+        }}
+    }
+
+    sub mkdir(str name) {
+        ; -- make a new subdirectory.
+        %ir {{
+            loadm.l r99200.l,[diskio.mkdir.name]
+            syscall 49 (r99200.l)
+        }}
+    }
+
+    sub rmdir(str name) {
+        ; -- remove a subdirectory.
+        %ir {{
+            loadm.l r99200.l,[diskio.rmdir.name]
+            syscall 51 (r99200.l)
+        }}
+    }
+
+    sub curdir() -> str {
+        ; return current directory name or 0 if error
+        %ir {{
+            syscall 48 (): r99000.w
+            returnr.w r99000.w
+        }}
+    }
+
+    sub status() -> str {
+        ; -- retrieve the disk drive's current status message
+        return "unknown"
+    }
+
+    sub status_code() -> ubyte {
+        ; -- return status code instead of whole CBM-DOS status string. (in this case always 255, which means 'unable to return sensible value')
+        return 255
+    }
+
+
+    sub save(str filenameptr, pointer start_address, uword savesize) -> bool {
+        %ir {{
+            load.b r99100.b,#0.b
+            loadm.l r99200.l,[diskio.save.filenameptr]
+            loadm.l r99201.l,[diskio.save.start_address]
+            loadm.w r99002.w,[diskio.save.savesize]
+            syscall 42 (r99100.b, r99200.l, r99201.l, r99002.w): r99101.b
+            returnr.b r99101.b
+        }}
+    }
+
+    ; like save() but omits the 2 byte prg header.
+    sub save_raw(str filenameptr, pointer start_address, uword savesize) -> bool {
+        %ir {{
+            load.b r99100.b,#1.b
+            loadm.l r99200.l,[diskio.save_raw.filenameptr]
+            loadm.l r99201.l,[diskio.save_raw.start_address]
+            loadm.w r99002.w,[diskio.save_raw.savesize]
+            syscall 42 (r99100.b, r99200.l, r99201.l, r99002.w): r99101.b
+            returnr.b r99101.b
+        }}
+    }
+
+    ; Use kernal LOAD routine to load the given program file in memory.
+    ; This is similar to Basic's  LOAD "filename",drive  /  LOAD "filename",drive,1
+    ; If you don't give an address_override, the location in memory is taken from the 2-byte file header.
+    ; If you specify a custom address_override, the first 2 bytes in the file are ignored
+    ; and the rest is loaded at the given location in memory.
+    ; Returns the end load address+1 if successful or 0 if a load error occurred.
+    sub load(str filenameptr, pointer address_override) -> uword {
+        %ir {{
+            loadm.l r99200.l,[diskio.load.filenameptr]
+            loadm.l r99201.l,[diskio.load.address_override]
+            syscall 40 (r99200.l, r99201.l): r99002.w
+            returnr.w r99002.w
+        }}
+    }
+
+    ; Identical to load(), but DOES INCLUDE the first 2 bytes in the file.
+    ; No program header is assumed in the file. Everything is loaded.
+    ; See comments on load() for more details.
+    sub load_raw(str filenameptr, pointer start_address) -> uword {
+        %ir {{
+            loadm.l r99200.l,[diskio.load_raw.filenameptr]
+            loadm.l r99201.l,[diskio.load_raw.start_address]
+            syscall 41 (r99200.l, r99201.l): r99002.w
+            returnr.w r99002.w
+        }}
+    }
+
+    sub delete(str filenameptr) {
+        ; -- delete a file on the drive
+        %ir {{
+            loadm.l r99200.l,[diskio.delete.filenameptr]
+            syscall 43 (r99200.l)
+        }}
+    }
+
+    sub rename(str oldfileptr, str newfileptr) {
+        ; -- rename a file on the drive
+        %ir {{
+            loadm.l r99200.l,[diskio.rename.oldfileptr]
+            loadm.l r99201.l,[diskio.rename.newfileptr]
+            syscall 44 (r99200.l, r99201.l)
+        }}
+    }
+
+    sub exists(str filename) -> bool {
+        ; -- returns true if the given file exists on the disk, otherwise false
+        if f_open(filename) {
+            f_close()
+            return true
+        }
+        return false
+    }
+
+    sub get_loadaddress(str filename) -> uword {
+        ; get the load address from a PRG file (usually $0801 but it can be different)
+        if f_open(filename) {
+            uword address
+            void f_read(&address, 2)
+            f_close()
+            return address
+        }
+        return 0
+    }
+
+    sub f_seek(long position) -> bool {
+        ; -- seek in the reading file opened with f_open, to the given 32-bits position
+        ;    Returns true if successful, false if the position is invalid or file not open.
+        %ir {{
+            loadm.l r99200.l,[diskio.f_seek.position]
+            syscall 63 (r99200.l): r99100.b
+            returnr.b r99100.b
+        }}
+    }
+
+    sub f_tell() -> long, long {
+        ; -- Returns the current read position of the opened read file, and the file size.
+        long @shared pos, size
+        %ir {{
+            syscall 64 (): r99200.l
+            storem.l r99200.l,[diskio.f_tell.pos]
+            syscall 65 (): r99200.l
+            storem.l r99200.l,[diskio.f_tell.size]
+        }}
+        return pos, size
+    }
+
+    sub loadlib(str libnameptr, pointer libaddress) -> uword {
+        ; -- Load a prog8 compiled library binary blob at the given location into memory.
+        ;    This is a wrapper around load_raw() for loading library binaries.
+        return load_raw(libnameptr, libaddress)
+    }
+}

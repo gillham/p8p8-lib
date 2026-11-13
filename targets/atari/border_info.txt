@@ -1,0 +1,7 @@
+
+
+POKE 53267,HUE*16 +LUMINANCE = set background color on Atari 800
+
+712 for the border. 
+
+

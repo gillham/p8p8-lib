@@ -1,0 +1,1151 @@
+; Internal Math library routines - always included by the compiler
+; note: some functions you might expect here are builtin functions,
+;       such as abs, sqrt, clamp, min, max for example.
+
+math {
+    %option no_symbol_prefixing, ignore_unused
+
+    ; Sine/cosine lookup tables, one per routine (not shared).
+    ; The tables live at block scope so the inlined
+    ; routines below all reference the same single copy. Tables that end up
+    ; unused (no trig routine called) are removed automatically.
+    private ubyte[256] sin8u_table = [$80, $83, $86, $89, $8c, $8f, $92, $95, $98, $9b, $9e, $a2, $a5, $a7, $aa, $ad,
+                                      $b0, $b3, $b6, $b9, $bc, $be, $c1, $c4, $c6, $c9, $cb, $ce, $d0, $d3, $d5, $d7,
+                                      $da, $dc, $de, $e0, $e2, $e4, $e6, $e8, $ea, $eb, $ed, $ee, $f0, $f1, $f3, $f4,
+                                      $f5, $f6, $f8, $f9, $fa, $fa, $fb, $fc, $fd, $fd, $fe, $fe, $fe, $ff, $ff, $ff,
+                                      $ff, $ff, $ff, $ff, $fe, $fe, $fe, $fd, $fd, $fc, $fb, $fa, $fa, $f9, $f8, $f6,
+                                      $f5, $f4, $f3, $f1, $f0, $ee, $ed, $eb, $ea, $e8, $e6, $e4, $e2, $e0, $de, $dc,
+                                      $da, $d7, $d5, $d3, $d0, $ce, $cb, $c9, $c6, $c4, $c1, $be, $bc, $b9, $b6, $b3,
+                                      $b0, $ad, $aa, $a7, $a5, $a2, $9e, $9b, $98, $95, $92, $8f, $8c, $89, $86, $83,
+                                      $80, $7c, $79, $76, $73, $70, $6d, $6a, $67, $64, $61, $5d, $5a, $58, $55, $52,
+                                      $4f, $4c, $49, $46, $43, $41, $3e, $3b, $39, $36, $34, $31, $2f, $2c, $2a, $28,
+                                      $25, $23, $21, $1f, $1d, $1b, $19, $17, $15, $14, $12, $11, $0f, $0e, $0c, $0b,
+                                      $0a, $09, $07, $06, $05, $05, $04, $03, $02, $02, $01, $01, $01, $00, $00, $00,
+                                      $00, $00, $00, $00, $01, $01, $01, $02, $02, $03, $04, $05, $05, $06, $07, $09,
+                                      $0a, $0b, $0c, $0e, $0f, $11, $12, $14, $15, $17, $19, $1b, $1d, $1f, $21, $23,
+                                      $25, $28, $2a, $2c, $2f, $31, $34, $36, $39, $3b, $3e, $41, $43, $46, $49, $4c,
+                                      $4f, $52, $55, $58, $5a, $5d, $61, $64, $67, $6a, $6d, $70, $73, $76, $79, $7c]
+    private ubyte[256] cos8u_table = [$ff, $ff, $ff, $ff, $fe, $fe, $fe, $fd, $fd, $fc, $fb, $fa, $fa, $f9, $f8, $f6,
+                                      $f5, $f4, $f3, $f1, $f0, $ee, $ed, $eb, $ea, $e8, $e6, $e4, $e2, $e0, $de, $dc,
+                                      $da, $d7, $d5, $d3, $d0, $ce, $cb, $c9, $c6, $c4, $c1, $be, $bc, $b9, $b6, $b3,
+                                      $b0, $ad, $aa, $a7, $a5, $a2, $9e, $9b, $98, $95, $92, $8f, $8c, $89, $86, $83,
+                                      $80, $7c, $79, $76, $73, $70, $6d, $6a, $67, $64, $61, $5d, $5a, $58, $55, $52,
+                                      $4f, $4c, $49, $46, $43, $41, $3e, $3b, $39, $36, $34, $31, $2f, $2c, $2a, $28,
+                                      $25, $23, $21, $1f, $1d, $1b, $19, $17, $15, $14, $12, $11, $0f, $0e, $0c, $0b,
+                                      $0a, $09, $07, $06, $05, $05, $04, $03, $02, $02, $01, $01, $01, $00, $00, $00,
+                                      $00, $00, $00, $00, $01, $01, $01, $02, $02, $03, $04, $05, $05, $06, $07, $09,
+                                      $0a, $0b, $0c, $0e, $0f, $11, $12, $14, $15, $17, $19, $1b, $1d, $1f, $21, $23,
+                                      $25, $28, $2a, $2c, $2f, $31, $34, $36, $39, $3b, $3e, $41, $43, $46, $49, $4c,
+                                      $4f, $52, $55, $58, $5a, $5d, $61, $64, $67, $6a, $6d, $70, $73, $76, $79, $7c,
+                                      $7f, $83, $86, $89, $8c, $8f, $92, $95, $98, $9b, $9e, $a2, $a5, $a7, $aa, $ad,
+                                      $b0, $b3, $b6, $b9, $bc, $be, $c1, $c4, $c6, $c9, $cb, $ce, $d0, $d3, $d5, $d7,
+                                      $da, $dc, $de, $e0, $e2, $e4, $e6, $e8, $ea, $eb, $ed, $ee, $f0, $f1, $f3, $f4,
+                                      $f5, $f6, $f8, $f9, $fa, $fa, $fb, $fc, $fd, $fd, $fe, $fe, $fe, $ff, $ff, $ff]
+    private ubyte[256] sin8_table = [$00, $03, $06, $09, $0c, $0f, $12, $15, $18, $1b, $1e, $21, $24, $27, $2a, $2d,
+                                     $30, $33, $36, $39, $3b, $3e, $41, $43, $46, $49, $4b, $4e, $50, $52, $55, $57,
+                                     $59, $5b, $5e, $60, $62, $64, $66, $67, $69, $6b, $6c, $6e, $70, $71, $72, $74,
+                                     $75, $76, $77, $78, $79, $7a, $7b, $7b, $7c, $7d, $7d, $7e, $7e, $7e, $7e, $7e,
+                                     $7f, $7e, $7e, $7e, $7e, $7e, $7d, $7d, $7c, $7b, $7b, $7a, $79, $78, $77, $76,
+                                     $75, $74, $72, $71, $70, $6e, $6c, $6b, $69, $67, $66, $64, $62, $60, $5e, $5b,
+                                     $59, $57, $55, $52, $50, $4e, $4b, $49, $46, $43, $41, $3e, $3b, $39, $36, $33,
+                                     $30, $2d, $2a, $27, $24, $21, $1e, $1b, $18, $15, $12, $0f, $0c, $09, $06, $03,
+                                     $00, $fd, $fa, $f7, $f4, $f1, $ee, $eb, $e8, $e5, $e2, $df, $dc, $d9, $d6, $d3,
+                                     $d0, $cd, $ca, $c7, $c5, $c2, $bf, $bd, $ba, $b7, $b5, $b2, $b0, $ae, $ab, $a9,
+                                     $a7, $a5, $a2, $a0, $9e, $9c, $9a, $99, $97, $95, $94, $92, $90, $8f, $8e, $8c,
+                                     $8b, $8a, $89, $88, $87, $86, $85, $85, $84, $83, $83, $82, $82, $82, $82, $82,
+                                     $81, $82, $82, $82, $82, $82, $83, $83, $84, $85, $85, $86, $87, $88, $89, $8a,
+                                     $8b, $8c, $8e, $8f, $90, $92, $94, $95, $97, $99, $9a, $9c, $9e, $a0, $a2, $a5,
+                                     $a7, $a9, $ab, $ae, $b0, $b2, $b5, $b7, $ba, $bd, $bf, $c2, $c5, $c7, $ca, $cd,
+                                     $d0, $d3, $d6, $d9, $dc, $df, $e2, $e5, $e8, $eb, $ee, $f1, $f4, $f7, $fa, $fd]
+    private ubyte[256] cos8_table = [$7f, $7e, $7e, $7e, $7e, $7e, $7d, $7d, $7c, $7b, $7b, $7a, $79, $78, $77, $76,
+                                     $75, $74, $72, $71, $70, $6e, $6c, $6b, $69, $67, $66, $64, $62, $60, $5e, $5b,
+                                     $59, $57, $55, $52, $50, $4e, $4b, $49, $46, $43, $41, $3e, $3b, $39, $36, $33,
+                                     $30, $2d, $2a, $27, $24, $21, $1e, $1b, $18, $15, $12, $0f, $0c, $09, $06, $03,
+                                     $00, $fd, $fa, $f7, $f4, $f1, $ee, $eb, $e8, $e5, $e2, $df, $dc, $d9, $d6, $d3,
+                                     $d0, $cd, $ca, $c7, $c5, $c2, $bf, $bd, $ba, $b7, $b5, $b2, $b0, $ae, $ab, $a9,
+                                     $a7, $a5, $a2, $a0, $9e, $9c, $9a, $99, $97, $95, $94, $92, $90, $8f, $8e, $8c,
+                                     $8b, $8a, $89, $88, $87, $86, $85, $85, $84, $83, $83, $82, $82, $82, $82, $82,
+                                     $81, $82, $82, $82, $82, $82, $83, $83, $84, $85, $85, $86, $87, $88, $89, $8a,
+                                     $8b, $8c, $8e, $8f, $90, $92, $94, $95, $97, $99, $9a, $9c, $9e, $a0, $a2, $a5,
+                                     $a7, $a9, $ab, $ae, $b0, $b2, $b5, $b7, $ba, $bd, $bf, $c2, $c5, $c7, $ca, $cd,
+                                     $d0, $d3, $d6, $d9, $dc, $df, $e2, $e5, $e8, $eb, $ee, $f1, $f4, $f7, $fa, $fd,
+                                     $00, $03, $06, $09, $0c, $0f, $12, $15, $18, $1b, $1e, $21, $24, $27, $2a, $2d,
+                                     $30, $33, $36, $39, $3b, $3e, $41, $43, $46, $49, $4b, $4e, $50, $52, $55, $57,
+                                     $59, $5b, $5e, $60, $62, $64, $66, $67, $69, $6b, $6c, $6e, $70, $71, $72, $74,
+                                     $75, $76, $77, $78, $79, $7a, $7b, $7b, $7c, $7d, $7d, $7e, $7e, $7e, $7e, $7e]
+    private ubyte[180] sinr8u_table = [$80, $84, $88, $8d, $91, $96, $9a, $9e, $a3, $a7, $ab, $af, $b3, $b7, $bb, $bf,
+                                       $c3, $c7, $ca, $ce, $d1, $d5, $d8, $db, $de, $e1, $e4, $e7, $e9, $ec, $ee, $f0,
+                                       $f2, $f4, $f6, $f7, $f9, $fa, $fb, $fc, $fd, $fe, $fe, $ff, $ff, $ff, $ff, $ff,
+                                       $fe, $fe, $fd, $fc, $fb, $fa, $f9, $f7, $f6, $f4, $f2, $f0, $ee, $ec, $e9, $e7,
+                                       $e4, $e1, $de, $db, $d8, $d5, $d1, $ce, $ca, $c7, $c3, $bf, $bb, $b7, $b3, $af,
+                                       $ab, $a7, $a3, $9e, $9a, $96, $91, $8d, $88, $84, $80, $7b, $77, $72, $6e, $69,
+                                       $65, $61, $5c, $58, $54, $50, $4c, $48, $44, $40, $3c, $38, $35, $31, $2e, $2a,
+                                       $27, $24, $21, $1e, $1b, $18, $16, $13, $11, $0f, $0d, $0b, $09, $08, $06, $05,
+                                       $04, $03, $02, $01, $01, $00, $00, $00, $00, $00, $01, $01, $02, $03, $04, $05,
+                                       $06, $08, $09, $0b, $0d, $0f, $11, $13, $16, $18, $1b, $1e, $21, $24, $27, $2a,
+                                       $2e, $31, $35, $38, $3c, $40, $44, $48, $4c, $50, $54, $58, $5c, $61, $65, $69,
+                                       $6e, $72, $77, $7b]
+    private ubyte[180] cosr8u_table = [$ff, $ff, $ff, $fe, $fe, $fd, $fc, $fb, $fa, $f9, $f7, $f6, $f4, $f2, $f0, $ee,
+                                       $ec, $e9, $e7, $e4, $e1, $de, $db, $d8, $d5, $d1, $ce, $ca, $c7, $c3, $bf, $bb,
+                                       $b7, $b3, $af, $ab, $a7, $a3, $9e, $9a, $96, $91, $8d, $88, $84, $80, $7b, $77,
+                                       $72, $6e, $69, $65, $61, $5c, $58, $54, $50, $4c, $48, $44, $40, $3c, $38, $35,
+                                       $31, $2e, $2a, $27, $24, $21, $1e, $1b, $18, $16, $13, $11, $0f, $0d, $0b, $09,
+                                       $08, $06, $05, $04, $03, $02, $01, $01, $00, $00, $00, $00, $00, $01, $01, $02,
+                                       $03, $04, $05, $06, $08, $09, $0b, $0d, $0f, $11, $13, $16, $18, $1b, $1e, $21,
+                                       $24, $27, $2a, $2e, $31, $35, $38, $3c, $40, $44, $48, $4c, $50, $54, $58, $5c,
+                                       $61, $65, $69, $6e, $72, $77, $7b, $7f, $84, $88, $8d, $91, $96, $9a, $9e, $a3,
+                                       $a7, $ab, $af, $b3, $b7, $bb, $bf, $c3, $c7, $ca, $ce, $d1, $d5, $d8, $db, $de,
+                                       $e1, $e4, $e7, $e9, $ec, $ee, $f0, $f2, $f4, $f6, $f7, $f9, $fa, $fb, $fc, $fd,
+                                       $fe, $fe, $ff, $ff]
+    private ubyte[180] sinr8_table = [$00, $04, $08, $0d, $11, $16, $1a, $1e, $23, $27, $2b, $2f, $33, $37, $3b, $3f,
+                                      $43, $47, $4a, $4e, $51, $54, $58, $5b, $5e, $61, $64, $66, $69, $6b, $6d, $70,
+                                      $72, $74, $75, $77, $78, $7a, $7b, $7c, $7d, $7d, $7e, $7e, $7e, $7f, $7e, $7e,
+                                      $7e, $7d, $7d, $7c, $7b, $7a, $78, $77, $75, $74, $72, $70, $6d, $6b, $69, $66,
+                                      $64, $61, $5e, $5b, $58, $54, $51, $4e, $4a, $47, $43, $3f, $3b, $37, $33, $2f,
+                                      $2b, $27, $23, $1e, $1a, $16, $11, $0d, $08, $04, $00, $fc, $f8, $f3, $ef, $ea,
+                                      $e6, $e2, $dd, $d9, $d5, $d1, $cd, $c9, $c5, $c1, $bd, $b9, $b6, $b2, $af, $ac,
+                                      $a8, $a5, $a2, $9f, $9c, $9a, $97, $95, $93, $90, $8e, $8c, $8b, $89, $88, $86,
+                                      $85, $84, $83, $83, $82, $82, $82, $81, $82, $82, $82, $83, $83, $84, $85, $86,
+                                      $88, $89, $8b, $8c, $8e, $90, $93, $95, $97, $9a, $9c, $9f, $a2, $a5, $a8, $ac,
+                                      $af, $b2, $b6, $b9, $bd, $c1, $c5, $c9, $cd, $d1, $d5, $d9, $dd, $e2, $e6, $ea,
+                                      $ef, $f3, $f8, $fc]
+    private ubyte[180] cosr8_table = [$7f, $7e, $7e, $7e, $7d, $7d, $7c, $7b, $7a, $78, $77, $75, $74, $72, $70, $6d,
+                                      $6b, $69, $66, $64, $61, $5e, $5b, $58, $54, $51, $4e, $4a, $47, $43, $3f, $3b,
+                                      $37, $33, $2f, $2b, $27, $23, $1e, $1a, $16, $11, $0d, $08, $04, $00, $fc, $f8,
+                                      $f3, $ef, $ea, $e6, $e2, $dd, $d9, $d5, $d1, $cd, $c9, $c5, $c1, $bd, $b9, $b6,
+                                      $b2, $af, $ac, $a8, $a5, $a2, $9f, $9c, $9a, $97, $95, $93, $90, $8e, $8c, $8b,
+                                      $89, $88, $86, $85, $84, $83, $83, $82, $82, $82, $81, $82, $82, $82, $83, $83,
+                                      $84, $85, $86, $88, $89, $8b, $8c, $8e, $90, $93, $95, $97, $9a, $9c, $9f, $a2,
+                                      $a5, $a8, $ac, $af, $b2, $b6, $b9, $bd, $c1, $c5, $c9, $cd, $d1, $d5, $d9, $dd,
+                                      $e2, $e6, $ea, $ef, $f3, $f8, $fc, $00, $04, $08, $0d, $11, $16, $1a, $1e, $23,
+                                      $27, $2b, $2f, $33, $37, $3b, $3f, $43, $47, $4a, $4e, $51, $54, $58, $5b, $5e,
+                                      $61, $64, $66, $69, $6b, $6d, $70, $72, $74, $75, $77, $78, $7a, $7b, $7c, $7d,
+                                      $7d, $7e, $7e, $7e]
+
+    inline sub sin8u(ubyte angle) -> ubyte {
+        return math.sin8u_table[angle]
+    }
+
+    inline sub cos8u(ubyte angle) -> ubyte {
+        return math.cos8u_table[angle]
+    }
+
+    inline sub sin8(ubyte angle) -> byte {
+        return math.sin8_table[angle] as byte
+    }
+
+    inline sub cos8(ubyte angle) -> byte {
+        return math.cos8_table[angle] as byte
+    }
+
+    inline sub sinr8u(ubyte radians) -> ubyte {
+        return math.sinr8u_table[radians]
+    }
+
+    inline sub cosr8u(ubyte radians) -> ubyte {
+        return math.cosr8u_table[radians]
+    }
+
+    inline sub sinr8(ubyte radians) -> byte {
+        return math.sinr8_table[radians] as byte
+    }
+
+    inline sub cosr8(ubyte radians) -> byte {
+        return math.cosr8_table[radians] as byte
+    }
+
+    asmsub rnd() clobbers(Y) -> ubyte @A {
+        %asm {{
+            jmp  prog8_math.randbyte
+        }}
+    }
+
+    asmsub rnd_rom() clobbers(Y) -> ubyte @A {
+        %asm {{
+            jmp  prog8_math.randbyte_rom
+        }}
+    }
+
+    asmsub rndw() -> uword @AY {
+        %asm {{
+            jmp  prog8_math.randword
+        }}
+    }
+
+    asmsub rndw_rom() -> uword @AY {
+        %asm {{
+            jmp  prog8_math.randword_rom
+        }}
+    }
+
+    sub randrange(ubyte n) -> ubyte {
+        ; -- return random number uniformly distributed from 0 to n-1
+        ;    NOTE: does not work for code in ROM, use randrange_rom instead for that
+        ; why this works: https://www.youtube.com/watch?v=3DvlLUWTNMY&t=347s
+        ; Uses cx16.r0 as temporary
+        cx16.r0 = math.rnd() * (n as uword)
+        return cx16.r0H
+    }
+
+    sub randrange_rom(ubyte n) -> ubyte {
+        ; -- return random number uniformly distributed from 0 to n-1
+        ;    NOTE: works for code in ROM, make sure you have initialized the seed using rndseed_rom
+        ; why this works: https://www.youtube.com/watch?v=3DvlLUWTNMY&t=347s
+        ; Uses cx16.r0 as temporary
+        cx16.r0 = math.rnd_rom() * (n as uword)
+        return cx16.r0H
+    }
+
+    sub randrangew(uword n) -> uword {
+        ; -- return random number uniformly distributed from 0 to n-1
+        ;    NOTE: does not work for code in ROM
+        ; why this works: https://www.youtube.com/watch?v=3DvlLUWTNMY&t=347s
+        cx16.r0 = math.rndw() * n
+        return math.mul16_last_upper()
+    }
+
+    sub randrangew_rom(uword n) -> uword {
+        ; -- return random number uniformly distributed from 0 to n-1
+        ;    NOTE: works for code in ROM, make sure you have initialized the seed using rndseed_rom
+        ; why this works: https://www.youtube.com/watch?v=3DvlLUWTNMY&t=347s
+        cx16.r0 = math.rndw_rom() * n
+        return math.mul16_last_upper()
+    }
+
+    asmsub rndseed(uword seed1 @AY, uword seed2 @R0) clobbers(A,Y) {
+        ; -- set new pseudo RNG's seed values. Defaults are: $00c2, $1137. NOTE: does not work for code in ROM, use rndseed_rom instead
+        %asm {{
+            sta  prog8_math.randword.x1
+            sty  prog8_math.randword.c1
+            lda  cx16.r0L
+            sta  prog8_math.randword.a1
+            lda  cx16.r0H
+            sta  prog8_math.randword.b1
+            rts
+        }}
+    }
+
+    asmsub rndseed_rom(uword seed1 @AY, uword seed2 @R0) clobbers(A,Y) {
+        ; -- set new pseudo RNG's seed values (for the ROM-version of the RNG). Good defaults are: $00c2, $1137.
+        %asm {{
+            sta  prog8_math.randword_rom._x1
+            sty  prog8_math.randword_rom._c1
+            lda  cx16.r0L
+            sta  prog8_math.randword_rom._a1
+            lda  cx16.r0H
+            sta  prog8_math.randword_rom._b1
+            rts
+        }}
+    }
+
+    asmsub log2(ubyte value @A) -> ubyte @Y {
+        %asm {{
+            sta  P8ZP_SCRATCH_B1
+            lda  #$80
+            ldy  #7
+-           bit  P8ZP_SCRATCH_B1
+            beq  +
+            rts
++           dey
+            bne  +
+            rts
++           lsr  a
+            bne  -
+            ; !notreached!
+        }}
+    }
+
+    asmsub log2w(uword value @AY) -> ubyte @Y {
+        ; Clobbers cx16.r0
+        %asm {{
+            sta  P8ZP_SCRATCH_W1
+            sty  P8ZP_SCRATCH_W1+1
+            lda  #<$8000
+            sta  cx16.r0
+            lda  #>$8000
+            sta  cx16.r0+1
+            ldy  #15
+-           lda  P8ZP_SCRATCH_W1
+            and  cx16.r0
+            sta  P8ZP_SCRATCH_B1
+            lda  P8ZP_SCRATCH_W1+1
+            and  cx16.r0+1
+            ora  P8ZP_SCRATCH_B1
+            beq  +
+            rts
++           dey
+            bne  +
+            rts
++           lsr  cx16.r0+1
+            ror  cx16.r0
+            jmp  -
+        }}
+    }
+
+    sub log2l(long value) -> ubyte {
+        ; returns the integer base-2 logarithm of the signed long value (position of the highest set bit)
+        ; returns 0 for value = 0
+        uword hi = (value >> 16) as uword
+        if hi != 0
+            return 16 + log2w(hi)
+        return log2w(value as uword)
+    }
+
+    asmsub mul16_last_upper() -> uword @AY {
+        ; This routine peeks into the internal 32 bits multiplication result buffer of the
+        ; 16*16 bits multiplication routine, to fetch the upper 16 bits of the last calculation.
+        ; Notes:
+        ;   - to avoid interference it's best to fetch and store this value immediately after the multiplication expression.
+        ;     for instance, simply printing a number may already result in new multiplication calls being performed
+        ;   - not all multiplications in the source code result in an actual multiplication call:
+        ;     some simpler multiplications will be optimized away into faster routines. These will not set the upper 16 bits at all!
+        ;   - THE RESULT IS ONLY VALID IF THE MULTIPLICATION WAS DONE WITH UWORD ARGUMENTS (or two positive WORD arguments)
+        ;     as soon as a negative word value (or 2) was used in the multiplication, these upper 16 bits are not valid!!
+        ;     Suggestion (if you are on the Commander X16): use verafx.muls() to get a hardware accelerated 32 bit signed multiplication.
+        %asm {{
+            lda  prog8_math.multiply_words.result+2
+            ldy  prog8_math.multiply_words.result+3
+            rts
+        }}
+    }
+
+    sub mul32(uword a, uword b) -> long {
+        ; return 32 bits result of a*b
+        cx16.r2 = a*b
+        return mklong2(mul16_last_upper(), cx16.r2)
+    }
+
+sub direction_sc(byte x1, byte y1, byte x2, byte y2) -> ubyte {
+    ; From a pair of signed coordinates around the origin, calculate discrete direction between 0 and 23 into A.
+    cx16.r0L = 3        ; quadrant
+    cx16.r1sL = x2-x1   ; xdelta
+    if_neg {
+        cx16.r0L--
+        cx16.r1sL = -cx16.r1sL
+    }
+    cx16.r2sL = y2-y1   ; ydelta
+    if_neg {
+        cx16.r0L-=2
+        cx16.r2sL = -cx16.r2sL
+    }
+    return direction_qd(cx16.r0L, cx16.r1L, cx16.r2L)
+}
+
+sub direction(ubyte x1, ubyte y1, ubyte x2, ubyte y2) -> ubyte {
+    ; From a pair of positive coordinates, calculate discrete direction between 0 and 23 into A.
+    cx16.r0L = 3        ; quadrant
+    if x2>=x1 {
+        cx16.r1L = x2-x1
+    } else {
+        cx16.r1L = x1-x2
+        cx16.r0L--
+    }
+    if y2>=y1 {
+        cx16.r2L = y2-y1
+    } else {
+        cx16.r2L = y1-y2
+        cx16.r0L -= 2
+    }
+    return direction_qd(cx16.r0L, cx16.r1L, cx16.r2L)
+}
+
+asmsub direction_qd(ubyte quadrant @A, ubyte xdelta @X, ubyte ydelta @Y) -> ubyte @A {
+    ;Arctan  https://github.com/dustmop/arctan24
+    ; From a pair of X/Y deltas (both >=0), and quadrant 0-3, calculate discrete direction between 0 and 23 into A.
+    ;  .reg:a @in  quadrant Number 0 to 3.
+    ;  .reg:x @in  x_delta Delta for x direction.
+    ;  .reg:y @in  y_delta Delta for y direction.
+    ; Returns A as the direction (0-23).
+    ; Clobbers cx16.r0 through cx16.r5 (used as temporary variables).
+
+    %asm {{
+x_delta = cx16.r0L
+y_delta = cx16.r1L
+quadrant = cx16.r2L
+half_value = cx16.r3L
+region_number = cx16.r4L
+small = cx16.r5L
+large = cx16.r5H
+
+  sta quadrant
+  sty y_delta
+  stx x_delta
+  cpx y_delta
+  bcs _XGreaterOrEqualY
+
+_XLessY:
+  lda #16
+  sta region_number
+  stx small
+  sty large
+  bne _DetermineRegion
+
+_XGreaterOrEqualY:
+  lda #0
+  sta region_number
+  stx large
+  sty small
+
+_DetermineRegion:
+  ; set A = small * 2.5
+  lda small
+  lsr a
+  sta half_value
+  lda small
+  asl a
+  bcs _SmallerQuotient
+  clc
+  adc half_value
+  bcs _SmallerQuotient
+  cmp large
+  bcc _LargerQuotient
+
+; S * 2.5 > L
+_SmallerQuotient:
+  ; set A = S * 1.25
+  lsr half_value
+  lda small
+  clc
+  adc half_value
+  cmp large
+  bcc _Region1 ; if S * 1.25 < L then goto Region1 (L / S > 1.25)
+  bcs _Region0 ;                                   (L / S < 1.25)
+
+; S * 2.5 < L
+_LargerQuotient:
+  ; set A = S * 7.5
+  lda small
+  asl a
+  asl a
+  asl a
+  bcs _Region2
+  sec
+  sbc half_value
+  cmp large
+  bcc _Region3 ; if S * 7.5 < L then goto Region3 (L / S > 7.5)
+  jmp _Region2 ;                                  (L / S < 7.5)
+
+_Region0:
+  ; L / S < 1.25. d=3,9,15,21
+  jmp _LookupResult
+
+_Region1:
+  ; 1.25 < L / S < 2.5. d=2,4,8,10,14,16,20,22
+  lda region_number
+  clc
+  adc #4
+  sta region_number
+  bpl _LookupResult
+
+_Region2:
+  ; 2.5 < L / S < 7.5. d=1,5,7,11,13,17,19,23
+  lda region_number
+  clc
+  adc #8
+  sta region_number
+  bpl _LookupResult
+
+_Region3:
+  ; 7.5 < L / S. d=0,6,12,18
+  lda region_number
+  clc
+  adc #12
+  sta region_number
+
+_LookupResult:
+  lda quadrant
+  clc
+  adc region_number
+  tax
+  lda _quadrant_region_to_direction,x
+  rts
+
+_quadrant_region_to_direction:
+  .byte  9, 3,15,21
+  .byte 10, 2,14,22
+  .byte 11, 1,13,23
+  .byte 12, 0,12, 0
+  .byte  9, 3,15,21
+  .byte  8, 4,16,20
+  .byte  7, 5,17,19
+  .byte  6, 6,18,18
+        ; !notreached!
+    }}
+}
+
+asmsub atan2(ubyte x1 @R0, ubyte y1 @R1, ubyte x2 @R2, ubyte y2 @R3) -> ubyte @A {
+    ;; Calculate the angle, in a 256-degree circle, between two points into A.
+    ;; The points (x1, y1) and (x2, y2) have to use *unsigned coordinates only* from the positive quadrant in the cartesian plane!
+    ;; http://codebase64.net/doku.php?id=base:8bit_atan2_8-bit_angle
+    ;; This uses 2 large lookup tables so uses a lot of memory but is super fast.
+    ;; Clobbers cx16.r0 through cx16.r4 (r0-r3 are input params, r4 is temporary).
+
+    %asm {{
+
+x1 = cx16.r0L
+y1 = cx16.r1L
+x2 = cx16.r2L
+y2 = cx16.r3L
+octant = cx16.r4L			;; temporary zeropage variable
+
+		lda x1
+		sec
+		sbc x2
+		bcs *+4
+		eor #$ff
+		tax
+		rol octant
+
+		lda y1
+		sec
+		sbc y2
+		bcs *+4
+		eor #$ff
+		tay
+		rol octant
+
+		lda log2_tab,x
+		sec
+		sbc log2_tab,y
+		bcc *+4
+		eor #$ff
+		tax
+
+		lda octant
+		rol a
+		and #%111
+		tay
+
+		lda atan_tab,x
+		eor octant_adjust,y
+		rts
+
+octant_adjust
+		.byte %00111111		;; x+,y+,|x|>|y|
+		.byte %00000000		;; x+,y+,|x|<|y|
+		.byte %11000000		;; x+,y-,|x|>|y|
+		.byte %11111111		;; x+,y-,|x|<|y|
+		.byte %01000000		;; x-,y+,|x|>|y|
+		.byte %01111111		;; x-,y+,|x|<|y|
+		.byte %10111111		;; x-,y-,|x|>|y|
+		.byte %10000000		;; x-,y-,|x|<|y|
+
+
+		;;;;;;;; atan(2^(x/32))*128/pi ;;;;;;;;
+
+atan_tab
+		.byte $00,$00,$00,$00,$00,$00,$00,$00
+		.byte $00,$00,$00,$00,$00,$00,$00,$00
+		.byte $00,$00,$00,$00,$00,$00,$00,$00
+		.byte $00,$00,$00,$00,$00,$00,$00,$00
+		.byte $00,$00,$00,$00,$00,$00,$00,$00
+		.byte $00,$00,$00,$00,$00,$00,$00,$00
+		.byte $00,$00,$00,$00,$00,$00,$00,$00
+		.byte $00,$00,$00,$00,$00,$00,$00,$00
+		.byte $00,$00,$00,$00,$00,$00,$00,$00
+		.byte $00,$00,$00,$00,$00,$00,$00,$00
+		.byte $00,$00,$00,$00,$00,$01,$01,$01
+		.byte $01,$01,$01,$01,$01,$01,$01,$01
+		.byte $01,$01,$01,$01,$01,$01,$01,$01
+		.byte $01,$01,$01,$01,$01,$01,$01,$01
+		.byte $01,$01,$01,$01,$01,$02,$02,$02
+		.byte $02,$02,$02,$02,$02,$02,$02,$02
+		.byte $02,$02,$02,$02,$02,$02,$02,$02
+		.byte $03,$03,$03,$03,$03,$03,$03,$03
+		.byte $03,$03,$03,$03,$03,$04,$04,$04
+		.byte $04,$04,$04,$04,$04,$04,$04,$04
+		.byte $05,$05,$05,$05,$05,$05,$05,$05
+		.byte $06,$06,$06,$06,$06,$06,$06,$06
+		.byte $07,$07,$07,$07,$07,$07,$08,$08
+		.byte $08,$08,$08,$08,$09,$09,$09,$09
+		.byte $09,$0a,$0a,$0a,$0a,$0b,$0b,$0b
+		.byte $0b,$0c,$0c,$0c,$0c,$0d,$0d,$0d
+		.byte $0d,$0e,$0e,$0e,$0e,$0f,$0f,$0f
+		.byte $10,$10,$10,$11,$11,$11,$12,$12
+		.byte $12,$13,$13,$13,$14,$14,$15,$15
+		.byte $15,$16,$16,$17,$17,$17,$18,$18
+		.byte $19,$19,$19,$1a,$1a,$1b,$1b,$1c
+		.byte $1c,$1c,$1d,$1d,$1e,$1e,$1f,$1f
+
+
+		;;;;;;;; log2(x)*32 ;;;;;;;;
+
+log2_tab
+		.byte $00,$00,$20,$32,$40,$4a,$52,$59
+		.byte $60,$65,$6a,$6e,$72,$76,$79,$7d
+		.byte $80,$82,$85,$87,$8a,$8c,$8e,$90
+		.byte $92,$94,$96,$98,$99,$9b,$9d,$9e
+		.byte $a0,$a1,$a2,$a4,$a5,$a6,$a7,$a9
+		.byte $aa,$ab,$ac,$ad,$ae,$af,$b0,$b1
+		.byte $b2,$b3,$b4,$b5,$b6,$b7,$b8,$b9
+		.byte $b9,$ba,$bb,$bc,$bd,$bd,$be,$bf
+		.byte $c0,$c0,$c1,$c2,$c2,$c3,$c4,$c4
+		.byte $c5,$c6,$c6,$c7,$c7,$c8,$c9,$c9
+		.byte $ca,$ca,$cb,$cc,$cc,$cd,$cd,$ce
+		.byte $ce,$cf,$cf,$d0,$d0,$d1,$d1,$d2
+		.byte $d2,$d3,$d3,$d4,$d4,$d5,$d5,$d5
+		.byte $d6,$d6,$d7,$d7,$d8,$d8,$d9,$d9
+		.byte $d9,$da,$da,$db,$db,$db,$dc,$dc
+		.byte $dd,$dd,$dd,$de,$de,$de,$df,$df
+		.byte $df,$e0,$e0,$e1,$e1,$e1,$e2,$e2
+		.byte $e2,$e3,$e3,$e3,$e4,$e4,$e4,$e5
+		.byte $e5,$e5,$e6,$e6,$e6,$e7,$e7,$e7
+		.byte $e7,$e8,$e8,$e8,$e9,$e9,$e9,$ea
+		.byte $ea,$ea,$ea,$eb,$eb,$eb,$ec,$ec
+		.byte $ec,$ec,$ed,$ed,$ed,$ed,$ee,$ee
+		.byte $ee,$ee,$ef,$ef,$ef,$ef,$f0,$f0
+		.byte $f0,$f1,$f1,$f1,$f1,$f1,$f2,$f2
+		.byte $f2,$f2,$f3,$f3,$f3,$f3,$f4,$f4
+		.byte $f4,$f4,$f5,$f5,$f5,$f5,$f5,$f6
+		.byte $f6,$f6,$f6,$f7,$f7,$f7,$f7,$f7
+		.byte $f8,$f8,$f8,$f8,$f9,$f9,$f9,$f9
+		.byte $f9,$fa,$fa,$fa,$fa,$fa,$fb,$fb
+		.byte $fb,$fb,$fb,$fc,$fc,$fc,$fc,$fc
+		.byte $fd,$fd,$fd,$fd,$fd,$fd,$fe,$fe
+		.byte $fe,$fe,$fe,$ff,$ff,$ff,$ff,$ff
+        ; !notreached!
+    }}
+}
+
+    asmsub diff(ubyte v1 @A, ubyte v2 @Y) -> ubyte @A {
+        ; -- returns the (absolute) difference, or distance, between the two bytes
+        %asm {{
+            sty  P8ZP_SCRATCH_REG
+            sec
+            sbc  P8ZP_SCRATCH_REG
+            bcs  +
+            eor  #255
+            adc  #1
++           rts
+        }}
+    }
+
+    asmsub diffw(uword w1 @R0, uword w2 @AY) -> uword @AY {
+        ; -- returns the (absolute) difference, or distance, between the two words
+        ;    clobbers cx16.r0 (used as input and temporary)
+        %asm {{
+            sec
+            sbc  cx16.r0L
+            sta  cx16.r0L
+            tya
+            sbc  cx16.r0H
+            sta  cx16.r0H
+            bcs  +
+            eor  #255
+            sta  cx16.r0H
+            lda  cx16.r0L
+            eor  #255
+            adc  #1
+            sta  cx16.r0L
+            bne  +
+            inc  cx16.r0H
++           lda  cx16.r0L
+            ldy  cx16.r0H
+            rts
+        }}
+    }
+
+    sub diffl(long v1, long v2) -> long {
+        ; -- returns the (absolute) difference, or distance, between the two longs
+        if v1>v2
+            return v1-v2
+        return v2-v1
+    }
+
+    sub crc16(^^ubyte data, uword length, uword initvalue, uword xorout) -> uword {
+        ; Calculates the CRC16 checksum of the buffer. You provide the initial start value and the final value that is xored with the result.
+        ; For XMODEM type checksum, use initvalue=0 and xorout=0.
+        ; For IBM-3740 type checksum, use initvalue=$ffff and xorout=0. (this is then equivalent to the cx16.memory_crc routine).
+        ; Clobbers R14 and R15.
+        ; There are also "streaming" crc16_start/update/end routines below, that allow you to calculate crc16 for data that doesn't fit in a single memory block.
+        cx16.r15 = initvalue
+        cx16.r14 = data
+        repeat length {
+            crc16_update(@(cx16.r14))
+            cx16.r14++
+        }
+        return cx16.r15 ^ xorout
+    }
+
+    sub crc16_start(uword initvalue) {
+        ; start the "streaming" crc16
+        ; note: tracks the crc16 checksum in cx16.r15!
+        ;       if your code uses that, it must save/restore it before calling this routine
+        cx16.r15 = initvalue
+    }
+
+    asmsub crc16_update(ubyte value @A) {
+        ; update the "streaming" crc16 with next byte value
+        ; note: tracks the crc16 checksum in cx16.r15!
+        ;       if your code uses that, it must save/restore it before calling this routine
+        ; note: this routine doesn't use a lookup table to speed up the calculation, so it is not particularly fast.
+        %asm {{
+        ; code is from: http://www.6502.org/source/integers/crc-more.html
+crclo   = cx16.r15L          ; current value of CRC
+crchi   = cx16.r15H
+
+        eor crchi       ; a contained the data
+        sta crchi       ; xor it into high byte
+        lsr             ; right shift a 4 bits
+        lsr             ; to make top of x^12 term
+        lsr             ; ($1...)
+        lsr
+        tax             ; save it
+        asl             ; then make top of x^5 term
+        eor crclo       ; and xor that with low byte
+        sta crclo       ; and save
+        txa             ; restore partial term
+        eor crchi       ; and update high byte
+        sta crchi       ; and save
+        asl             ; left shift three
+        asl             ; the rest of the terms
+        asl             ; have feedback from x^12
+        tax             ; save bottom of x^12
+        asl             ; left shift two more
+        asl             ; watch the carry flag
+        eor crchi       ; bottom of x^5 ($..2.)
+        tay             ; save high byte
+        txa             ; fetch temp value
+        rol             ; bottom of x^12, middle of x^5!
+        eor crclo       ; finally update low byte
+        sta crchi       ; then swap high and low bytes
+        sty crclo
+        rts
+
+        }}
+    }
+
+    sub crc16_end(uword xorout) -> uword {
+        ; finalize the "streaming" crc16, returns resulting crc16 value
+        return cx16.r15 ^ xorout
+    }
+
+    sub crc32(^^ubyte data, uword length) -> long {
+        ; Calculates the CRC-32 (ISO-HDLC/PKZIP) checksum of the buffer.
+        ; Clobbers R13 through R15,  returns the 32 bits result as long
+        ; There are also "streaming" crc32_start/update/end routines below, that allow you to calculate crc32 for data that doesn't fit in a single memory block.
+        cx16.r13 = data
+        crc32_start()
+        repeat length {
+            crc32_update(@(cx16.r13))
+            cx16.r13++
+        }
+        return crc32_end()
+    }
+
+    sub crc32_start() {
+        ; start the "streaming" crc32
+        ; note: tracks the crc32 checksum in cx16.r14 and cx16.r15!
+        ;       if your code uses these, it must save/restore them before calling this routine
+        cx16.r14 = cx16.r15 = $ffff
+    }
+
+    sub crc32_update(ubyte value) {
+        ; update the "streaming" crc32 with next byte value
+        ; note: tracks the crc32 checksum in cx16.r14 and cx16.r15!
+        ;       if your code uses these, it must save/restore them before calling this routine
+        ; implementation detail: see https://stackoverflow.com/a/75951866  , the zlib crc32 is the "reflected" variant
+        %asm {{
+            eor  cx16.r14L
+            sta  cx16.r14L
+            ldy  #8
+-           lsr  cx16.r15H
+            ror  cx16.r15L
+            ror  cx16.r14H
+            ror  cx16.r14L
+            bcc  +
+            lda  cx16.r15H
+            eor  #$ed
+            sta  cx16.r15H
+            lda  cx16.r15L
+            eor  #$b8
+            sta  cx16.r15L
+            lda  cx16.r14H
+            eor  #$83
+            sta  cx16.r14H
+            lda  cx16.r14L
+            eor  #$20
+            sta  cx16.r14L
++           dey
+            bne  -
+            rts
+        }}
+; original prog8 code:
+;        cx16.r14L ^= value
+;        repeat 8 {
+;            cx16.r15 >>= 1
+;            ror(cx16.r14)
+;            if_cs {
+;                cx16.r15 ^= $edb8
+;                cx16.r14 ^= $8320
+;            }
+;        }
+    }
+
+    asmsub crc32_end() -> long @R14R15 {
+        ; finalize the "streaming" crc32
+        ; returns the result value in cx16.r15 (high word) and r14 (low word)
+        %asm {{
+            lda  cx16.r15H
+            eor  #255
+            sta  cx16.r15H
+            lda  cx16.r15L
+            eor  #255
+            sta  cx16.r15L
+            lda  cx16.r14H
+            eor  #255
+            sta  cx16.r14H
+            lda  cx16.r14L
+            eor  #255
+            sta  cx16.r14L
+            rts
+        }}
+    }
+
+
+    asmsub lerp(ubyte v0 @A, ubyte v1 @X, ubyte t @Y) clobbers(X, Y) -> ubyte @A {
+        ; Linear interpolation (LERP)
+        ; returns an interpolation between two inputs (v0, v1) for a parameter t in the interval [0, 255]
+        ; guarantees v = v1 when t = 255
+        ; original Prog8 implementation:
+        ;   if v1<v0
+        ;       return v0 - msb(t as uword * (v0 - v1) + 255)
+        ;   else
+        ;       return v0 + msb(t as uword * (v1 - v0) + 255)
+        %asm {{
+            sta  P8ZP_SCRATCH_B1       ; v0
+            sty  P8ZP_SCRATCH_W1       ; multiplier = t
+            txa
+            sec
+            sbc  P8ZP_SCRATCH_B1       ; v1 - v0
+            bcs  _asc
+            eor  #$ff
+            clc
+            adc  #1                    ; descending: delta = v0 - v1
+            ldy  #1
+            sty  P8ZP_SCRATCH_PTR
+            jmp  _have_delta
+_asc:
+            ldy  #0
+            sty  P8ZP_SCRATCH_PTR
+_have_delta:
+            sta  P8ZP_SCRATCH_REG      ; multiplicand = delta
+            lda  #0
+            sta  P8ZP_SCRATCH_W2       ; product low byte
+            ldx  #8
+_ml:
+            lsr  P8ZP_SCRATCH_W1
+            bcc  _noadd
+            clc
+            adc  P8ZP_SCRATCH_REG
+_noadd:
+            ror  a
+            ror  P8ZP_SCRATCH_W2
+            dex
+            bne  _ml
+            ldx  P8ZP_SCRATCH_W2
+            beq  _noround
+            clc
+            adc  #1                    ; round up: +1 if low byte nonzero
+_noround:
+            ldx  P8ZP_SCRATCH_PTR
+            bne  _desc
+            clc
+            adc  P8ZP_SCRATCH_B1       ; v0 + inc
+            rts
+_desc:
+            sta  P8ZP_SCRATCH_REG
+            lda  P8ZP_SCRATCH_B1
+            sec
+            sbc  P8ZP_SCRATCH_REG      ; v0 - inc
+            rts
+        }}
+    }
+
+    asmsub lerpw(uword v0 @R0, uword v1 @R1, uword t @R2) clobbers(A, X, Y) -> uword @R0 {
+        ; Linear interpolation (LERP) on word values
+        ; returns an interpolation between two inputs (v0, v1) for a parameter t in the interval [0, 65535]
+        ; guarantees v = v1 when t = 65535
+        ; original Prog8 implementation:
+        ;   if v1<v0 {
+        ;       t *= v0-v1
+        ;       cx16.r15 = math.mul16_last_upper()
+        ;       if t!=0
+        ;           cx16.r15++
+        ;       return v0 - cx16.r15
+        ;   }
+        ;   t *= v1-v0
+        ;   cx16.r15 = math.mul16_last_upper()
+        ;   if t!=0
+        ;       cx16.r15++
+        ;   return v0 + cx16.r15
+        %asm {{
+            lda  cx16.r1
+            cmp  cx16.r0
+            lda  cx16.r1+1
+            sbc  cx16.r0+1
+            bcs  _asc
+            lda  #1
+            sta  P8ZP_SCRATCH_B1       ; direction = descending
+            lda  cx16.r0
+            sec
+            sbc  cx16.r1
+            sta  prog8_math.multiply_words.multiplier
+            lda  cx16.r0+1
+            sbc  cx16.r1+1
+            sta  prog8_math.multiply_words.multiplier+1
+            jmp  _have_delta
+_asc:
+            lda  #0
+            sta  P8ZP_SCRATCH_B1       ; direction = ascending
+            lda  cx16.r1
+            sec
+            sbc  cx16.r0
+            sta  prog8_math.multiply_words.multiplier
+            lda  cx16.r1+1
+            sbc  cx16.r0+1
+            sta  prog8_math.multiply_words.multiplier+1
+_have_delta:
+            lda  cx16.r2               ; multiplicand = t
+            ldy  cx16.r2+1
+            jsr  prog8_math.multiply_words
+            lda  prog8_math.multiply_words.result
+            ora  prog8_math.multiply_words.result+1
+            beq  _noround
+            inc  prog8_math.multiply_words.result+2
+            bne  _noround
+            inc  prog8_math.multiply_words.result+3
+_noround:
+            lda  P8ZP_SCRATCH_B1
+            bne  _desc
+            clc
+            lda  cx16.r0               ; ascending: v0 + upper word
+            adc  prog8_math.multiply_words.result+2
+            sta  cx16.r0
+            lda  cx16.r0+1
+            adc  prog8_math.multiply_words.result+3
+            sta  cx16.r0+1
+            rts
+_desc:
+            lda  cx16.r0               ; descending: v0 - upper word
+            sec
+            sbc  prog8_math.multiply_words.result+2
+            sta  cx16.r0
+            lda  cx16.r0+1
+            sbc  prog8_math.multiply_words.result+3
+            sta  cx16.r0+1
+            rts
+        }}
+    }
+
+    asmsub interpolate(ubyte v @R0, ubyte inputMin @R1, ubyte inputMax @R2, ubyte outputMin @R3, ubyte outputMax @R4) clobbers(X, Y) -> ubyte @A {
+        ; Interpolate a value v in interval [inputMin, inputMax] to output interval [outputMin, outputMax]
+        ; original Prog8 implementation:
+        ;   cx16.r15 = ((v-inputMin)*256+inputMax) / (inputMax-inputMin)
+        ;   cx16.r15 *= (outputMax-outputMin)
+        ;   return cx16.r15H + outputMin
+        %asm {{
+            lda  cx16.r0L
+            sec
+            sbc  cx16.r1L
+            sta  P8ZP_SCRATCH_REG      ; numerator high byte = v - inputMin
+            lda  cx16.r2L
+            sec
+            sbc  cx16.r1L
+            sta  P8ZP_SCRATCH_W1       ; divisor = inputMax - inputMin
+            lda  cx16.r2L
+            sta  P8ZP_SCRATCH_W2       ; numerator low byte = inputMax
+            lda  #0
+            sta  P8ZP_SCRATCH_PTR      ; remainder
+            ldx  #16
+_div:
+            asl  P8ZP_SCRATCH_W2
+            rol  P8ZP_SCRATCH_REG
+            rol  P8ZP_SCRATCH_PTR
+            bcs  _sub
+            lda  P8ZP_SCRATCH_PTR
+            cmp  P8ZP_SCRATCH_W1
+            bcc  _no
+_sub:
+            lda  P8ZP_SCRATCH_PTR
+            sec
+            sbc  P8ZP_SCRATCH_W1
+            sta  P8ZP_SCRATCH_PTR
+            inc  P8ZP_SCRATCH_W2
+_no:
+            dex
+            bne  _div
+            lda  P8ZP_SCRATCH_W2       ; quotient -> multiply_ubyte_word multiplier
+            sta  P8ZP_SCRATCH_W1
+            lda  P8ZP_SCRATCH_REG
+            sta  P8ZP_SCRATCH_W1+1
+            lda  cx16.r4L
+            sec
+            sbc  cx16.r3L              ; A = outputMax - outputMin
+            jsr  prog8_math.multiply_ubyte_word
+            tya                        ; high byte of product
+            clc
+            adc  cx16.r3L              ; + outputMin
+            rts
+        }}
+    }
+
+    asmsub interpolatew(uword v @R0, uword inputMin @R1, uword inputMax @R2, uword outputMin @R3, uword outputMax @R4) clobbers(A, X, Y) -> uword @R0 {
+        ; Interpolate a value v in interval [inputMin, inputMax] to output interval [outputMin, outputMax]
+        ; clobbers cx16.r12-cx16.r15 (multiply/division working registers) and cx16.r1, cx16.r2 (destroyed by the division helper)
+        ; original Prog8 implementation:
+        ;   return outputMin + ((v - inputMin) as long * (outputMax - outputMin) as long / (inputMax - inputMin) as long) as uword
+        %asm {{
+            lda  cx16.r4               ; outputMax - outputMin = multiplier
+            sec
+            sbc  cx16.r3
+            sta  prog8_math.multiply_words.multiplier
+            lda  cx16.r4+1
+            sbc  cx16.r3+1
+            sta  prog8_math.multiply_words.multiplier+1
+            lda  cx16.r0               ; v - inputMin = multiplicand (in AY)
+            sec
+            sbc  cx16.r1
+            sta  P8ZP_SCRATCH_B1
+            lda  cx16.r0+1
+            sbc  cx16.r1+1
+            tay
+            lda  P8ZP_SCRATCH_B1
+            jsr  prog8_math.multiply_words
+            lda  prog8_math.multiply_words.result      ; product -> r12/r13 (dividend)
+            sta  cx16.r12
+            lda  prog8_math.multiply_words.result+1
+            sta  cx16.r12+1
+            lda  prog8_math.multiply_words.result+2
+            sta  cx16.r13
+            lda  prog8_math.multiply_words.result+3
+            sta  cx16.r13+1
+            lda  cx16.r2               ; inputMax - inputMin = divisor
+            sec
+            sbc  cx16.r1
+            sta  cx16.r14
+            lda  cx16.r2+1
+            sbc  cx16.r1+1
+            sta  cx16.r14+1
+            lda  #0
+            sta  cx16.r15
+            sta  cx16.r15+1
+            jsr  prog8_math.div_longs
+            lda  cx16.r14              ; + outputMin, keep low word
+            clc
+            adc  cx16.r3
+            sta  cx16.r0
+            lda  cx16.r14+1
+            adc  cx16.r3+1
+            sta  cx16.r0+1
+            rts
+        }}
+    }
+
+    sub gcd(uword @nozp a, uword @nozp b) -> uword {
+        ; Calculate the Greatest Common Divisor of two 16-bit unsigned integers using the Binary GCD algorithm (Stein's algorithm). Clobbers R0,R1 !
+
+        alias aa = cx16.r0
+        alias bb = cx16.r1
+
+        aa=a
+        bb=b
+
+        ; Handle the case where one number is zero
+        if aa == 0  return bb
+        if bb == 0  return aa
+
+        ; Count the number of common factors of 2
+        ubyte shift = 0
+
+        ; Count common factors of 2 by shifting both numbers right until at least one is odd
+        while ((aa | bb) & 1) == 0 {
+            aa >>= 1
+            bb >>= 1
+            shift++
+        }
+
+        ; Remove remaining factors of 2 from a
+        while (aa & 1) == 0
+            aa >>= 1
+
+        ; Now a is odd. Loop until b becomes zero
+        while bb != 0 {
+            ; Remove remaining factors of 2 from b
+            while (bb & 1) == 0
+                bb >>= 1
+
+            ; Make sure a <= b
+            if aa > bb
+                swap(aa, bb)
+
+            bb -= aa
+        }
+
+        ; Return the result multiplied by the common factors of 2
+        return aa << shift
+    }
+
+    asmsub popcount(ubyte value @A) clobbers(X, Y) -> ubyte @A {
+        ; count the number of set bits in the byte
+        %asm {{
+            ldx  #0
+            ldy  #8
+        -   lsr  a
+            bcc  +
+            inx
+        +   dey
+            bne  -
+            txa
+            rts
+        }}
+    }
+
+    asmsub ctz(uword value @AY) clobbers(X, Y) -> ubyte @A {
+        ; count trailing zero bits of the word; returns 16 if value is 0
+        %asm {{
+            sta  P8ZP_SCRATCH_W1
+            sty  P8ZP_SCRATCH_W1+1
+            lda  P8ZP_SCRATCH_W1
+            ora  P8ZP_SCRATCH_W1+1
+            bne  +
+            lda  #16
+            rts
+        +   ldx  #0
+        -   lda  P8ZP_SCRATCH_W1
+            and  #1
+            bne  done
+            lsr  P8ZP_SCRATCH_W1+1
+            ror  P8ZP_SCRATCH_W1
+            inx
+            cpx  #16
+            bne  -
+        done:
+            txa
+            rts
+        }}
+    }
+
+    asmsub reverse(uword value @AY) -> uword @AY {
+        ; reverse the bit order of the word
+        %asm {{
+            sta  P8ZP_SCRATCH_W1
+            sty  P8ZP_SCRATCH_W1+1
+            lda  #0
+            sta  P8ZP_SCRATCH_W2
+            sta  P8ZP_SCRATCH_W2+1
+            ldy  #16
+        -   asl  P8ZP_SCRATCH_W2
+            rol  P8ZP_SCRATCH_W2+1
+            lsr  P8ZP_SCRATCH_W1+1
+            ror  P8ZP_SCRATCH_W1
+            bcc  +
+            inc  P8ZP_SCRATCH_W2
+        +   dey
+            bne  -
+            lda  P8ZP_SCRATCH_W2
+            ldy  P8ZP_SCRATCH_W2+1
+            rts
+        }}
+    }
+}

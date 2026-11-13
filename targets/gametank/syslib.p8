@@ -1,0 +1,1143 @@
+; Prog8 definitions for the GameTank retro console
+; Including memory registers, I/O registers, Basic and Kernal subroutines.
+
+%option no_symbol_prefixing, ignore_unused
+
+cbm {
+    ; Commodore (CBM) common variables, vectors and kernal routines
+
+    &ubyte  TIME_HI         = $ed       ; software jiffy clock, hi byte
+    &ubyte  TIME_MID        = $ee       ;  .. mid byte
+    &ubyte  TIME_LO         = $ef       ;    .. lo byte. Updated by IRQ every 1/60 sec
+
+;    &uword  NMI_VEC         = $FFFA     ; 6502 nmi vector
+;    &uword  RESET_VEC       = $FFFC     ; 6502 reset vector
+;    &uword  IRQ_VEC         = $FFFE     ; 6502 interrupt vector
+
+inline asmsub STOP2() clobbers(X,A) -> bool @Pz  {
+    ; -- just like STOP, but omits the special keys result value in A.
+    ;    just for convenience because most of the times you're only interested in the stop pressed or not status.
+    %asm {{
+        ;jsr  cbm.STOP
+        lda  #$01
+    }}
+}
+
+inline asmsub GETIN2() clobbers(X,Y) -> ubyte @A {
+    ; -- just like GETIN, but omits the carry flag result value.
+    ;    just for convenience because GETIN is so often used to just read keyboard input,
+    ;    where you don't have to deal with a potential error status
+    %asm {{
+        lda  gametank.GAMEPAD2  ; causes *other* controller to reset select line
+        lda  gametank.GAMEPAD1  ; read 1st set of buttons
+        ldx  gametank.GAMEPAD1  ; read 2nd set of buttons
+        eor  #255               ; invert A
+        ;lda  #0
+        ;cpx  #$ff
+        ;beq  +
+        ;lda  #'2'
++       nop  
+    }}
+}
+
+asmsub SETTIM(ubyte low @ A, ubyte middle @ X, ubyte high @ Y) {
+    ; PET stub to set the software clock
+    %asm {{
+        sty  TIME_HI
+        stx  TIME_MID
+        sta  TIME_LO
+        rts
+    }}
+}
+
+asmsub RDTIM() -> ubyte @ A, ubyte @ X, ubyte @ Y {
+    ; PET stub to read the software clock (A=lo,X=mid,Y=high)
+    %asm {{
+        ldy  TIME_HI
+        ldx  TIME_MID
+        lda  TIME_LO
+        rts
+    }}
+}
+
+asmsub RDTIM16() clobbers(X) -> uword @AY {
+    ; --  like RDTIM() but only returning the lower 16 bits in AY for convenience
+    %asm {{
+        lda  TIME_LO
+        ldy  TIME_MID
+        rts
+    }}
+}
+
+asmsub SETTIML(long jiffies @R0R1) {
+    ; -- just like SETTIM, but with a single 32 bit (lower 24 bits used) argument.
+    %asm {{
+        lda  cx16.r0
+        ldx  cx16.r0+1
+        ldy  cx16.r0+2
+        jmp  SETTIM
+    }}
+}
+
+asmsub RDTIML() clobbers(X) -> long @R0R1 {
+    ; --  like RDTIM() and returning the timer value as a 32 bit (lower 24 bits used) value.
+    %asm {{
+        jsr  RDTIM
+        sta  cx16.r0
+        stx  cx16.r0+1
+        sty  cx16.r0+2
+        lda  #0
+        sta  cx16.r0+3
+        rts
+    }}
+}
+
+sub CLEARST() {
+    ; -- Set the ST status variable back to 0. (there's no direct kernal call for this)
+    ;    Note: a drive error state (blinking led) isn't cleared! You can use diskio.status() to clear that.
+;    SETNAM(0, $0000)
+;    SETLFS(15, 3, 15)
+;    void OPEN()
+;    CLOSE(15)
+}
+
+asmsub kbdbuf_clear() {
+    ; -- convenience helper routine to clear the keyboard buffer
+    %asm {{
+-       jsr  GETIN
+        cmp  #0
+        bne  -
+        rts
+    }}
+}
+
+}
+
+gametank {
+%option force_output    ; "cartbank" sub should be asm instead?
+
+        ; GameTank hardware registers and state
+        ;bool @shared blit_active = false          ; True when blitter is active. Completion IRQ sets false.
+        bool @shared blit_active          ; True when blitter is active. Completion IRQ sets false.
+        bool @shared draw_busy
+        bool @shared frameflag
+
+
+        ; Virtual text screen.
+        const uword Screen  = $0200
+        const uword Color   = $0400
+        ; framebuffer
+;        const uword Bitmap  = $4000
+
+
+        ; ---- System control registers ----
+        &ubyte  ACPRESET            = $2000     ; Write 1 to reset audio coprocessor
+        &ubyte  ACPNMI              = $2001     ; Write 1 to send NMI to audio coprocessor
+
+        ; Banking register
+        &ubyte  BANKREG             = $2005     ; Banking Register
+        const ubyte SPRITEPAGE      = %00000111 ; Sprite RAM page selection bits
+        const ubyte FRAMEBUFFER     = %00001000 ; Bit selects active framebuffer to read/write/blit
+        const ubyte CLIP_LR         = %00010000 ; Bit to enable clipping left/right edge blits
+        const ubyte CLIP_TB         = %00100000 ; Bit to enable clipping top/bottom edge blits
+        const ubyte RAMPAGE         = %11000000 ; General purpose RAM page selection bits
+
+        ; Audio control register
+        &ubyte  ACPRATE             = $2006     ; Audio enable and sample rate
+
+        ; Blitter DMA engine controls (registers further down)
+        &ubyte  DMAFLAGS            = $2007     ; Configure blitter and video memory
+        const ubyte DMA_ENABLE      = %00000001 ; Enable/disable blitter
+        const ubyte DMA_PAGE_OUT    = %00000010 ; Select framebuffer page sent to TV
+        const ubyte DMA_NMI         = %00000100 ; Enable NMI generated by vertical blank
+        const ubyte DMA_COLORFILL   = %00001000 ; Use solid color blits not sprites
+        const ubyte DMA_GCARRY      = %00010000 ; Set 0 to 16x16 tiles when blit drawing
+        const ubyte DMA_CPU_TO_VRAM = %00100000 ; cpu ram access: 0 = sprite, 1 = framebuffer
+        const ubyte DMA_IRQ         = %01000000 ; Enable DMA completion interrupt
+        const ubyte DMA_OPAQUE      = %10000000 ; 0 = transparency, 1 = disabled
+
+        ; Gamepad ports.
+        &ubyte  GAMEPAD1            = $2008     ; Gamepad 1 (left port)
+        &ubyte  GAMEPAD2            = $2009     ; Gamepad 2 (right port)
+
+        ; ---- VIA 6522 registers ----
+        ; VIA 1
+        &ubyte  VIA1PB          = $2800     ; Port B I/O register
+        &ubyte  VIA1PA1         = $2801     ; Port A I/O register
+        &ubyte  VIA1DDRB        = $2802     ; Port B data direction register
+        &ubyte  VIA1DDRA        = $2803     ; Port A data direction register
+        &ubyte  VIA1T1CL        = $2804     ; Timer 1 least significant byte (LSB) of count
+        &ubyte  VIA1T1CH        = $2805     ; Timer 1 most significant byte (MSB) of count
+        &ubyte  VIA1T1LL        = $2806     ; Timer 1 low order (LSB) latch byte
+        &ubyte  VIA1T1LH        = $2807     ; Timer 1 high order (MSB) latch byte (VIA1T1HL)
+        &ubyte  VIA1T2CL        = $2808     ; Timer 2 low order (LSB) counter and LSB latch
+        &ubyte  VIA1T2CH        = $2809     ; Timer 2 high order (MSB) counter and MSB latch
+        &ubyte  VIA1SR          = $280A     ; Shift register for parallel/serial conversion
+        &ubyte  VIA1ACR         = $280B     ; Auxiliary control register
+        &ubyte  VIA1PCR         = $280C     ; Peripheral control register for handshaking
+        &ubyte  VIA1IFR         = $280D     ; Interrupt flag register (IFR)
+        &ubyte  VIA1IER         = $280E     ; Interrupt enable register (IER)
+        &ubyte  VIA1PA2         = $280F     ; Mirror of port A I/O minus CA1/CA2 control lines
+        ; ---- end of VIA registers ----
+
+        ; Audio RAM
+        &ubyte  AUDIORAM            = $3000     ; $3000-$3FFF
+
+        ; Screen RAM (framebuffer / sprite ram / blitter parameters)
+        const uword  SCREENRAM           = $4000     ; $4000-$7FFF
+
+        ; Blitter DMA engine controls (registers further down)
+        &ubyte  BLIT_VX             = $4000     ; X coord in FB of left column to draw
+        &ubyte  BLIT_VY             = $4001     ; Y coord in FB of top row to draw
+        &ubyte  BLIT_GX             = $4002     ; X coord in Sprite RAM of first column of source data
+        &ubyte  BLIT_GY             = $4003     ; Y coord in Sprite RAM of first row of source data
+        &ubyte  BLIT_WIDTH          = $4004     ; Width of drawing operation. Bit 7 = horizontal flip
+        &ubyte  BLIT_HEIGHT         = $4005     ; Height of drawing operation. Bit 7 = vertical flip
+        &ubyte  BLIT_START          = $4006     ; Write 0 = clear irq no blit, 1=clear irq & blit
+        &ubyte  BLIT_COLOR          = $4007     ; Color for fill mode (DMA_COLORFILL_ENABLE)
+
+        ; 6502 default vectors
+        &uword  NMI_VEC         = $FFFA     ; 6502 nmi vector, end of cartridge ram
+        &uword  RESET_VEC       = $FFFC     ; 6502 reset vector, end of cartridge ram
+        &uword  IRQ_VEC         = $FFFE     ; 6502 interrupt vector, end of cartridge ram
+
+; ---- utilities -----
+    sub xcartbank(ubyte value) {
+        ubyte pins
+        ubyte temp
+
+        ; set data direction pins
+        gametank.VIA1DDRA |= %00000000
+
+        ; clear all pins
+        gametank.VIA1PA1  = %00000000
+
+        pins = value
+        sys.clear_carry()
+        rol(pins)   ; high-bit in carry
+        rol(pins)   ; high-bit in bit 0
+        rol(pins)   ; high-bit in bit 1 (data)
+
+        repeat 8 {
+            ; stash current value
+            temp = pins
+
+            ; mask data pin
+            pins &= %00000010
+            ; write data bit and set clock low
+            gametank.VIA1PA1  = pins
+            ; write data bit and set clock high
+            gametank.VIA1PA1  = pins | %00000001
+
+            ; restore
+            pins = temp
+            rol(pins)
+        }
+            ; set latch
+            gametank.VIA1PA1  = %00000100
+            ; reset latch
+            gametank.VIA1PA1  = %00000000
+    }
+
+; cartridge banks 0-127 reserved for RAM on carts
+; cartridge banks 128-255 are actual ROM cart banks
+; this should be used for all banking of the "ROM"
+; space $8000-$BFFF whether ram or rom cart.
+inline asmsub rombank(ubyte bank @A) {
+    ; -- set the rom banks
+    %asm {{
+        sta  $01        ; cart / rom bank mirror
+        jsr  cartbank   ; switch actual cartridge rom bank
+                        ; cartbank should move here in asm.
+    }}
+}
+
+; should this be general purpose ram only?
+; lower two bits could be asl 6 times to 
+; put in correct spot.
+; asl 6, push a, clear top two bits of mirror
+; store mirror, pull a, and with mirror, store mirror
+; store bank register
+; (since it banks the zero page & stack as well)
+inline asmsub rambank(ubyte bank @A) {
+    ; -- set the ram bank
+    %asm {{
+        asl                 ; shift left 6 times
+        asl
+        asl
+        asl
+        asl
+        asl                 ; bits 0 & 1 now in 6 & 7
+        pha                 ; stash general purpose ram bank
+        lda  #%00111111     ; GP ram bank inverted mask
+        and  $00            ; mask off GP ram bank
+        sta  $00            ; store with GP ram bank cleared
+        pla                 ; restore ram bank bits
+        ora  $00            ; or with ram bank mirror
+        sta  $00            ; finally store ram bank mirror
+        sta  $2005          ; write-only bank register
+    }}
+}
+
+inline asmsub getrombank() -> ubyte @A {
+    ; -- get the current rom bank
+    %asm {{
+        lda  $01            ; return mirror as register is write-only
+    }}
+}
+
+inline asmsub getrambank() -> ubyte @A {
+    ; -- get the current RAM bank
+    %asm {{
+        lda  $00            ; return mirror as register is write-only
+    }}
+}
+
+inline asmsub push_rombank(ubyte newbank @A) clobbers(Y) {
+    ; push the current rombank on the stack and makes the given rom bank active
+    ; combined with pop_rombank() makes for easy temporary rom bank switch
+    %asm {{
+        ldy  $01
+        phy
+        sta  $01            ; should call non-inline cart bank switch
+    }}
+}
+
+inline asmsub pop_rombank() {
+    ; sets the current rom bank back to what was stored previously on the stack
+    %asm {{
+        pla
+        sta  $01            ; should call non-inline cart bank switch
+    }}
+}
+
+inline asmsub push_rambank(ubyte newbank @A) clobbers(Y) {
+    ; push the current hiram bank on the stack and makes the given hiram bank active
+    ; combined with pop_rombank() makes for easy temporary hiram bank switch
+    %asm {{
+        ldy  $00
+        phy
+        sta  $00            ; should call non-inline ram bank switch
+    }}
+}
+
+inline asmsub pop_rambank() {
+    ; sets the current hiram bank back to what was stored previously on the stack
+    %asm {{
+        pla
+        sta  $00            ; should call non-inline ram bank switch
+    }}
+}
+
+inline asmsub numbanks() -> ubyte @A {
+    ; -- Returns the number of available general purpose RAM banks (each bank is 8 Kb).
+    ;    This is always 4 on GameTank.
+    %asm {{
+        lda  #4
+    }}
+}
+
+    ; this works to cartridge ram / rom banks, not GP RAM.
+    ; So $8000-$BFFF.  Banking GP RAM with ZP & stack needs
+    ; much more complex code.
+    asmsub x16jsrfar() {
+        %asm {{
+            ; setup a JSRFAR call (using X16 call convention)
+            sta  P8ZP_SCRATCH_W2        ; save A
+            sty  P8ZP_SCRATCH_W2+1      ; save Y
+            php
+            pla
+            sta  P8ZP_SCRATCH_REG       ; save Status
+
+            pla
+            sta  P8ZP_SCRATCH_W1        ; pull return address
+            pla
+            sta  P8ZP_SCRATCH_W1+1      ; from stack to find args
+
+            ; retrieve arguments
+            ldy  #$01
+            lda  (P8ZP_SCRATCH_W1),y            ; grab low byte of target address
+            sta  _jmpfar_vec
+            iny
+            lda  (P8ZP_SCRATCH_W1),y            ; now the high byte
+            sta  _jmpfar_vec+1
+            iny
+            lda  (P8ZP_SCRATCH_W1),y            ; then the target bank
+            sta  P8ZP_SCRATCH_B1
+
+            ; adjust return address to skip over the arguments
+            clc
+            lda  P8ZP_SCRATCH_W1
+            adc  #3
+            sta  P8ZP_SCRATCH_W1
+            lda  P8ZP_SCRATCH_W1+1
+            adc  #0
+            pha
+            lda  P8ZP_SCRATCH_W1
+            pha
+            lda  $01                            ; save old cart ram / rom bank
+            pha
+            ; set target bank, restore A, Y and flags
+            lda  P8ZP_SCRATCH_REG
+            pha
+            lda  P8ZP_SCRATCH_B1
+            sta  $01                    ; save to bankreg mirror
+            phx                         ; save X also
+            jsr  cartbank
+            plx                         ; restore after sub call
+            lda  P8ZP_SCRATCH_W2
+            ldy  P8ZP_SCRATCH_W2+1
+            plp
+            jsr  _jsrfar        ; do the actual call
+            ; restore bank without clobbering status flags and A register
+            sta  P8ZP_SCRATCH_W1
+            php
+            pla
+            sta  P8ZP_SCRATCH_B1
+            pla
+            sta  $01                    ; save to bankreg mirror
+            phx                         ; save X also
+            jsr  cartbank
+            plx                         ; restore after sub call
+            lda  P8ZP_SCRATCH_B1
+            pha
+            lda  P8ZP_SCRATCH_W1
+            plp
+            rts
+_jsrfar     jmp  (_jmpfar_vec)
+
+            .section BSS
+_jmpfar_vec .word ?
+            .send BSS
+
+            ; !notreached!
+        }}
+    }
+}
+
+%import shared_sys_functions
+
+sys {
+    ; ------- lowlevel system routines --------
+
+    const ubyte target = 64         ;  compilation target specifier.  255=virtual, 128=C128, 64=C64, 32=PET, 16=CommanderX16, 8=atari800XL, 7=Neo6502
+
+    const ubyte SIZEOF_BOOL  = sizeof(bool)
+    const ubyte SIZEOF_BYTE  = sizeof(byte)
+    const ubyte SIZEOF_UBYTE = sizeof(ubyte)
+    const ubyte SIZEOF_WORD  = sizeof(word)
+    const ubyte SIZEOF_UWORD = sizeof(uword)
+    const ubyte SIZEOF_LONG  = sizeof(long)
+    const ubyte SIZEOF_POINTER = sizeof(&sys.wait)
+    const ubyte SIZEOF_FLOAT = sizeof(float)
+    const byte  MIN_BYTE     = -128
+    const byte  MAX_BYTE     = 127
+    const ubyte MIN_UBYTE    = 0
+    const ubyte MAX_UBYTE    = 255
+    const word  MIN_WORD     = -32768
+    const word  MAX_WORD     = 32767
+    const uword MIN_UWORD    = 0
+    const uword MAX_UWORD    = 65535
+    ; MIN_FLOAT and MAX_FLOAT are defined in the floats module if imported
+
+
+    sub  disable_runstop_and_charsetswitch() {
+        p8_sys_startup.disable_runstop_and_charsetswitch()
+    }
+
+    sub  enable_runstop_and_charsetswitch() {
+        p8_sys_startup.enable_runstop_and_charsetswitch()
+    }
+
+
+asmsub  set_irq(uword handler @AY) clobbers(A)  {
+	%asm {{
+	    php
+	    sei
+        sta  _vector
+        sty  _vector+1
+		lda  #<_irq_handler
+		sta  cbm.CINV
+		lda  #>_irq_handler
+		sta  cbm.CINV+1
+		plp
+		rts
+_irq_handler
+        jsr  sys.save_prog8_internals
+        cld
+
+        jsr  _run_custom
+        pha
+		jsr  sys.restore_prog8_internals
+		pla
+		beq  +                  ; skip default IRQ handler
+		jmp  cbm.IRQDFRT	; continue with normal kernal irq routine
++		lda  gametank.VIA1IFR      ; read interrupt status register
+		sta  gametank.VIA1IFR      ; write same value to clear active interrupts
+		pla
+		tay
+		pla
+		tax
+		pla
+		rti
+
+_run_custom
+		jmp  (_vector)
+		.section BSS
+_vector	.word ?
+		.send BSS
+        ; !notreached!
+    }}
+}
+
+asmsub  restore_irq() clobbers(A) {
+	%asm {{
+	    php
+		sei
+		lda  #<cbm.IRQDFRT
+		sta  cbm.CINV
+		lda  #>cbm.IRQDFRT
+		sta  cbm.CINV+1
+		lda  #%00000010
+		sta  gametank.VIA1IER	; restore only raster irq
+		plp
+		rts
+	}}
+}
+
+asmsub  set_rasterirq(uword handler @AY, uword rasterpos @R0) clobbers(A) {
+	%asm {{
+	    php
+	    sei
+        sta  user_vector
+        sty  user_vector+1
+        lda  cx16.r0
+        ldy  cx16.r0+1
+		jsr  sys.set_rasterline
+ 		;lda  #%00000001
+		;sta  gametank.IREQMASK   ; enable raster interrupt signals from vic
+
+        lda  #<_raster_irq_handler
+        sta  cbm.CINV
+        lda  #>_raster_irq_handler
+        sta  cbm.CINV+1
+        plp
+        rts
+
+_raster_irq_handler
+		jsr  sys.save_prog8_internals
+		cld
+
+        jsr  _run_custom
+        pha
+        jsr  sys.restore_prog8_internals
+        lda  #$02
+        sta  gametank.VIA1IFR   		; acknowledge raster irq
+        pla
+        beq  +
+		jmp  cbm.IRQDFRT                ; continue with kernal irq routine
++		pla
+		tay
+		pla
+		tax
+		pla
+		rti
+
+_run_custom
+		jmp  (user_vector)
+		.section BSS
+user_vector	.word ?
+		.send BSS
+
+		; !notreached!
+	}}
+}
+
+    asmsub update_rasterirq(uword handler @AY, uword rasterpos @R0) clobbers(A) {
+        ; -- just update the IRQ handler and raster line position for the raster IRQ
+        ;    this is much more efficient than calling set_rasterirq() again every time.
+        ;    (but you have to call that one initially at least once to setup the prog8 handler itself)
+        %asm {{
+            php
+            sei
+            sta  sys.set_rasterirq.user_vector
+            sty  sys.set_rasterirq.user_vector+1
+            lda  cx16.r0L
+            ldy  cx16.r0H
+            jsr  sys.set_rasterline
+            plp
+            rts
+        }}
+    }
+
+asmsub  set_rasterline(uword line @AY) {
+    ; -- only set a new raster line for the raster IRQ
+    %asm {{
+;        sta  gametank.RASTER     ; set the raster line number where interrupt should occur
+;        lda  gametank.SCROLY
+        and  #%01111111
+        cpy  #0
+        beq  +
+        ora  #%10000000
+;+       sta  gametank.SCROLY     ; clear most significant bit of raster position
+        rts
+    }}
+}
+
+
+    asmsub reset_system()  {
+        ; Soft-reset the system back to initial power-on Basic prompt.
+        %asm {{
+            sei
+            jmp  gametank.RESET_VEC      ; there might be some reconfiguration required.
+        }}
+    }
+
+    asmsub wait(uword jiffies @AY) {
+        ; --- wait approximately the given number of jiffies (1/60th seconds) (N or N+1)
+        ;     note: the system irq handler has to be active for this to work as it depends on the system jiffy clock
+        %asm {{
+            stx  P8ZP_SCRATCH_B1
+            sta  P8ZP_SCRATCH_W1
+            sty  P8ZP_SCRATCH_W1+1
+
+_loop       lda  P8ZP_SCRATCH_W1
+            ora  P8ZP_SCRATCH_W1+1
+            bne  +
+            ldx  P8ZP_SCRATCH_B1
+            rts
+
++           lda  cbm.TIME_LO
+            sta  P8ZP_SCRATCH_B1
+-           lda  cbm.TIME_LO
+            cmp  P8ZP_SCRATCH_B1
+            beq  -
+
+            lda  P8ZP_SCRATCH_W1
+            bne  +
+            dec  P8ZP_SCRATCH_W1+1
++           dec  P8ZP_SCRATCH_W1
+            jmp  _loop
+        }}
+    }
+
+    asmsub waitvsync() clobbers(A) {
+        ; --- busy wait till the next vsync has occurred (approximately), without depending on custom irq handling.
+        ;     note: a more accurate way to wait for vsync is to set up a vsync irq handler instead.
+        %asm {{
+-           lda  cbm.TIME_LO    ; jiffy clock (updated every vsync nmi)
+            and  #%00000001
+            beq  -
+-           lda  cbm.TIME_LO  ; jiffy clock -- wait for one transition?
+            and  #%00000001
+            bne  -
+            rts
+        }}
+    }
+
+    inline asmsub waitrastborder() {
+        ; --- busy wait till the raster position has reached the bottom screen border (approximately)
+        ;     note: a more accurate way to do this is by using a raster irq handler instead.
+        %asm {{
+-           ;lda  gametank.RSTL8    ; highest bit of raster line
+            and  #%00000001
+            beq  -
+        }}
+    }
+
+    asmsub waitrasterline(uword line @AY) {
+        ; -- CPU busy wait until the given raster line is reached
+        %asm {{
+            cpy  #0
+            bne  _larger
+-           ;cmp  gametank.RASTER
+            bne  -
+            gametank  gametank.SCROLY
+            bmi  -
+            rts
+_larger
+            ;cmp  gametank.RASTER
+            bne  _larger
+            ;bit  gametank.SCROLY
+            bpl  _larger
+            rts
+        }}
+    }
+
+
+    inline asmsub disable_caseswitch() {
+        %asm {{
+            lda  #$80
+            sta  1351
+        }}
+    }
+
+    inline asmsub enable_caseswitch() {
+        %asm {{
+            lda  #0
+            sta  1351
+        }}
+    }
+
+    asmsub exit(ubyte returnvalue @A) {
+        ; -- immediately exit the program with a return code in the A register
+        %asm {{
+            sta  p8_sys_startup.cleanup_at_exit._exitcode
+            ldx  prog8_lib.orig_stackpointer
+            txs
+            jmp  p8_sys_startup.cleanup_at_exit
+        }}
+    }
+
+    asmsub exit2(ubyte resulta @A, ubyte resultx @X, ubyte resulty @Y) {
+        ; -- immediately exit the program with result values in the A, X and Y registers.
+        %asm {{
+            sta  p8_sys_startup.cleanup_at_exit._exitcode
+            stx  p8_sys_startup.cleanup_at_exit._exitcodeX
+            sty  p8_sys_startup.cleanup_at_exit._exitcodeY
+            ldx  prog8_lib.orig_stackpointer
+            txs
+            jmp  p8_sys_startup.cleanup_at_exit
+        }}
+    }
+
+    asmsub exit3(ubyte resulta @A, ubyte resultx @X, ubyte resulty @Y, bool carry @Pc) {
+        ; -- immediately exit the program with result values in the A, X and Y registers, and the Carry flag in the status register.
+        %asm {{
+            sta  p8_sys_startup.cleanup_at_exit._exitcode
+            lda  #0
+            rol  a
+            sta  p8_sys_startup.cleanup_at_exit._exitcarry
+            stx  p8_sys_startup.cleanup_at_exit._exitcodeX
+            sty  p8_sys_startup.cleanup_at_exit._exitcodeY
+            ldx  prog8_lib.orig_stackpointer
+            txs
+            jmp  p8_sys_startup.cleanup_at_exit
+        }}
+    }
+
+    inline asmsub push_returnaddress(uword address @XY) {
+        %asm {{
+            ; push like JSR would:  address-1,  MSB first then LSB
+            cpx  #0
+            bne  +
+            dey
++           dex
+            tya
+            pha
+            txa
+            pha
+        }}
+    }
+
+    asmsub get_as_returnaddress(uword address @XY) -> uword @AX {
+        %asm {{
+            ; return the address like JSR would push onto the stack:  address-1,  MSB first then LSB
+            cpx  #0
+            bne  +
+            dey
++           dex
+            tya
+            rts
+        }}
+    }
+
+    sub cpu_is_65816() -> bool {
+        ; Returns true when you have a 65816 cpu, false when it's a 6502.
+        return false
+    }
+}
+
+cx16 {
+    ; the sixteen virtual 16-bit registers that the CX16 has defined in the zeropage
+    ; they are in zeropage on the Minicube64 as well.
+; the sixteen virtual 16-bit registers in both normal unsigned mode and signed mode (s)
+    &uword r0  = $0008
+    &uword r1  = $000a
+    &uword r2  = $000c
+    &uword r3  = $000e
+    &uword r4  = $0010
+    &uword r5  = $0012
+    &uword r6  = $0014
+    &uword r7  = $0016
+    &uword r8  = $0018
+    &uword r9  = $001a
+    &uword r10 = $001c
+    &uword r11 = $001e
+    &uword r12 = $0020
+    &uword r13 = $0022
+    &uword r14 = $0024
+    &uword r15 = $0026
+
+    ; signed word versions
+    &word r0s  = $0008
+    &word r1s  = $000a
+    &word r2s  = $000c
+    &word r3s  = $000e
+    &word r4s  = $0010
+    &word r5s  = $0012
+    &word r6s  = $0014
+    &word r7s  = $0016
+    &word r8s  = $0018
+    &word r9s  = $001a
+    &word r10s = $001c
+    &word r11s = $001e
+    &word r12s = $0020
+    &word r13s = $0022
+    &word r14s = $0024
+    &word r15s = $0026
+
+    ; signed long versions
+    &long r0r1sl = $0008
+    &long r2r3sl = $000c
+    &long r4r5sl = $0010
+    &long r6r7sl = $0014
+    &long r8r9sl = $0018
+    &long r10r11sl = $001c
+    &long r12r13sl = $0020
+    &long r14r15sl = $0024
+
+    ; ubyte versions (low and high bytes)
+    &ubyte r0L  = $0008
+    &ubyte r1L  = $000a
+    &ubyte r2L  = $000c
+    &ubyte r3L  = $000e
+    &ubyte r4L  = $0010
+    &ubyte r5L  = $0012
+    &ubyte r6L  = $0014
+    &ubyte r7L  = $0016
+    &ubyte r8L  = $0018
+    &ubyte r9L  = $001a
+    &ubyte r10L = $001c
+    &ubyte r11L = $001e
+    &ubyte r12L = $0020
+    &ubyte r13L = $0022
+    &ubyte r14L = $0024
+    &ubyte r15L = $0026
+
+    &ubyte r0H  = $0009
+    &ubyte r1H  = $000b
+    &ubyte r2H  = $000d
+    &ubyte r3H  = $000f
+    &ubyte r4H  = $0011
+    &ubyte r5H  = $0013
+    &ubyte r6H  = $0015
+    &ubyte r7H  = $0017
+    &ubyte r8H  = $0019
+    &ubyte r9H  = $001b
+    &ubyte r10H = $001d
+    &ubyte r11H = $001f
+    &ubyte r12H = $0021
+    &ubyte r13H = $0023
+    &ubyte r14H = $0025
+    &ubyte r15H = $0027
+
+    ; signed byte versions (low and high bytes)
+    &byte r0sL  = $0008
+    &byte r1sL  = $000a
+    &byte r2sL  = $000c
+    &byte r3sL  = $000e
+    &byte r4sL  = $0010
+    &byte r5sL  = $0012
+    &byte r6sL  = $0014
+    &byte r7sL  = $0016
+    &byte r8sL  = $0018
+    &byte r9sL  = $001a
+    &byte r10sL = $001c
+    &byte r11sL = $001e
+    &byte r12sL = $0020
+    &byte r13sL = $0022
+    &byte r14sL = $0024
+    &byte r15sL = $0026
+
+    &byte r0sH  = $0009
+    &byte r1sH  = $000b
+    &byte r2sH  = $000d
+    &byte r3sH  = $000f
+    &byte r4sH  = $0011
+    &byte r5sH  = $0013
+    &byte r6sH  = $0015
+    &byte r7sH  = $0017
+    &byte r8sH  = $0019
+    &byte r9sH  = $001b
+    &byte r10sH = $001d
+    &byte r11sH = $001f
+    &byte r12sH = $0021
+    &byte r13sH = $0023
+    &byte r14sH = $0025
+    &byte r15sH = $0027
+
+    ; boolean versions
+    &bool r0bL  = $0008
+    &bool r1bL  = $000a
+    &bool r2bL  = $000c
+    &bool r3bL  = $000e
+    &bool r4bL  = $0010
+    &bool r5bL  = $0012
+    &bool r6bL  = $0014
+    &bool r7bL  = $0016
+    &bool r8bL  = $0018
+    &bool r9bL  = $001a
+    &bool r10bL = $001c
+    &bool r11bL = $001e
+    &bool r12bL = $0020
+    &bool r13bL = $0022
+    &bool r14bL = $0024
+    &bool r15bL = $0026
+
+    &bool r0bH  = $0009
+    &bool r1bH  = $000b
+    &bool r2bH  = $000d
+    &bool r3bH  = $000f
+    &bool r4bH  = $0011
+    &bool r5bH  = $0013
+    &bool r6bH  = $0015
+    &bool r7bH  = $0017
+    &bool r8bH  = $0019
+    &bool r9bH  = $001b
+    &bool r10bH = $001d
+    &bool r11bH = $001f
+    &bool r12bH = $0021
+    &bool r13bH = $0023
+    &bool r14bH = $0025
+    &bool r15bH = $0027
+
+
+    asmsub save_virtual_registers() clobbers(A,Y) {
+        %asm {{
+            ldy  #31
+    -       lda  cx16.r0,y
+            sta  _cx16_vreg_storage,y
+            dey
+            bpl  -
+            rts
+
+            .section BSS
+    _cx16_vreg_storage
+            .word ?,?,?,?,?,?,?,?
+            .word ?,?,?,?,?,?,?,?
+            .send BSS
+            ; !notreached!
+        }}
+    }
+
+    asmsub restore_virtual_registers() clobbers(A,Y) {
+        %asm {{
+            ldy  #31
+    -       lda  save_virtual_registers._cx16_vreg_storage,y
+            sta  cx16.r0,y
+            dey
+            bpl  -
+            rts
+        }}
+    }
+}
+
+p8_sys_startup {
+    ; program startup and shutdown machinery. Needs to reside in normal system ram.
+
+; TODO cleanup banking
+asmsub  init_system()  {
+    ; Initializes the machine to a sane starting state.
+    ; Called automatically by the loader program logic.
+    ; This means that the KERNAL and CHARGEN ROMs are banked in,
+    ; BASIC ROM is NOT banked in (so we have another 8Kb of RAM at our disposal),
+    ; the VIC, SID and CIA chips are reset, screen is cleared, and the default IRQ is set.
+    ; Also a different color scheme is chosen to identify ourselves a little.
+    ; Uppercase charset is activated.
+    %asm {{
+        ; keep irq off for now (should already be off)
+        sei
+        ldy  #0
+        lda  #0
+-       iny
+        sta  0,y
+        bne  -                  ; busy loop delay while VIA stabilizes
+
+;        ; clear most of stack
+;        ldy  #$fe
+;        lda  #0
+;-       dey
+;        sta  $0100,y
+;        bne  -                  ; busy loop delay while VIA stabilizes
+
+
+        ; initialize banking (these bits make no sense)
+;        lda  #%00101000         ; top/bottom clip & alternate framebuffer?
+;        sta  gametank.BANKREG   ; switch banking
+;        sta  $1FFF              ; ?? write a signature
+;        stz  gametank.BANKREG   ; default / zero banking?
+;        sta  $1FFF              ; ?? write a signature again
+
+        ; don't need this right now as this is cartridge
+        ; bank control.  flat 32KB rom shouldn't need it.
+        ; setup VIA
+;        lda  #%00000111
+;        sta  gametank.VIA1DDRA  ; configure ???
+;        lda  #$ff
+;        sta  gametank.VIA1PA1   ; configure ???
+;        lda  #$fd
+        ; jsr _bank_shift_out... somehow drive the shift register?
+        ; need to replicate this.  assuming default state might be ok?
+
+        ; try to initialize video
+        ; try to select output framebuffer
+        lda  #gametank.DMA_CPU_TO_VRAM|gametank.DMA_NMI|gametank.DMA_OPAQUE
+        ;lda  #%00100010         ; DMA_CPU_TO_VRAM | DMA_PAGE_OUT -- 2nd FB
+        sta  gametank.DMAFLAGS
+
+        ; set framebuffer to match above
+        lda  #%00000000          ; first frame buffer 
+        ;lda  #%00001000          ; second frame buffer
+        sta  gametank.BANKREG
+
+;        ; early exit
+        bra  _out
+;
+        ; try to draw to the screen ram
+        ldx  #20
+        lda  #<gametank.SCREENRAM
+        sta  $50
+        lda  #>gametank.SCREENRAM
+        sta  $51
+        inc  $51 ; move draw area down
+        inc  $51 ; move draw area down
+_loop0: ldy  #0
+_loop1: lda  #$0f
+        tya ; debug
+        sta  ($50),y
+        iny
+        bne  _loop1
+        inc  $51
+        dex
+        bne  _loop0
+_out:
+        cli             ; enable IRQs now
+        rts
+_irq:
+        stz  gametank.draw_busy     ; signals draw queue is empty
+        stz  gametank.blit_active   ; signals blitter completion irq fired.
+        stz  gametank.BLIT_START    ; clear IRQ
+        rti
+_vnmi:
+        stz  gametank.frameflag     ; used by sdk await_vsync()
+        inc  cbm.TIME_LO
+        bne  +
+        inc  cbm.TIME_MID
+        bne  +
+        inc  cbm.TIME_HI
++       rti
+
+    ; This creates 6502 vectors at the end of ROM space.
+    ; The section is defined in the target .properties file.
+    ; We use prog8_program_entry (vs prog8_program_start) because
+    ; we need to guarantee that prog8_program_entry is in the upper
+    ; 16KB fixed ROM.  With `%address $8000` for example we will
+    ; end up with prog8_program_start at $8000 in the cartridge banked
+    ; rom area and it might not be on the correct bank at startup.
+    ; So prog8_program_entry is used at it almost immediately sets the
+    ; cart bank to 128 before `jmp prog8_program_start`
+    .section rom_vectors
+        .addr p8_sys_startup.init_system._vnmi
+        .addr prog8_program_entry
+        .addr p8_sys_startup.init_system._irq
+    .send
+        ; !notreached!
+    }}
+}
+
+asmsub  init_system_phase2()  {
+    %asm {{
+        ;cld    ; done already
+        clc
+        clv
+
+        ; fill screen memory with a space
+        lda  #<gametank.Screen
+        sta  cx16.r0L
+        lda  #>gametank.Screen
+        sta  cx16.r0H
+        lda  #<24*20
+        sta  cx16.r1L
+        lda  #>24*20
+        sta  cx16.r1H
+        lda  #32
+        jsr  sys.memset
+
+        ; set color memory to all black. (white instead?)
+        lda  #<gametank.Color
+        sta  cx16.r0L
+        lda  #>gametank.Color
+        sta  cx16.r0H
+        lda  #<24*20
+        sta  cx16.r1L
+        lda  #>24*20
+        sta  cx16.r1H
+        lda  #0
+        jsr  sys.memset
+
+        ; zero out the framebuffer
+        lda  #<gametank.SCREENRAM
+        sta  cx16.r0L
+        lda  #>gametank.SCREENRAM
+        sta  cx16.r0H
+        lda  #<128*128
+        sta  cx16.r1L
+        lda  #>128*128
+        sta  cx16.r1H
+        lda  #0
+        jsr  sys.memset
+
+        ; set cartridge to bank 128 (first *ROM* bank)
+        lda  #$80
+        sta  $01
+        jsr  cartbank   ; should be jmp
+        rts
+    }}
+}
+
+asmsub  cleanup_at_exit() {
+    ; executed when the main subroutine does rts
+    %asm {{
+        ; TODO cleanup.
+loop:   jmp  loop
+        lda  _exitcarry
+        lsr  a
+        lda  _exitcode
+        ldx  _exitcodeX
+        ldy  _exitcodeY
+-       jmp  -      ; halt
+        rts
+
+        .section BSS
+_exitcarry  .byte ?
+_exitcode   .byte ?
+_exitcodeX  .byte ?
+_exitcodeY  .byte ?
+        .send BSS
+
+        ; !notreached!
+    }}
+}
+
+asmsub  disable_runstop_and_charsetswitch() clobbers(A) {
+    %asm {{
+        lda  #$80
+        sta  1351   ; disable charset switching
+        lda  #103
+        sta  806    ; disable run/stop key
+        rts
+    }}
+}
+
+asmsub  enable_runstop_and_charsetswitch() clobbers(A) {
+    %asm {{
+        lda  #0
+        sta  1351   ; enable charset switching
+        lda  #101
+        sta  806    ; enable run/stop key
+        rts
+    }}
+}
+
+}

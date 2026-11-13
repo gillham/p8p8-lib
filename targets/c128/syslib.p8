@@ -1,0 +1,1146 @@
+; Prog8 definitions for the Commodore-128
+; Including memory registers, I/O registers, Basic and Kernal subroutines.
+
+%option no_symbol_prefixing, ignore_unused
+
+cbm {
+    ; Commodore (CBM) common variables, vectors and kernal routines
+
+        &ubyte  TIME_HI         = $a0       ; software jiffy clock, hi byte
+        &ubyte  TIME_MID        = $a1       ;  .. mid byte
+        &ubyte  TIME_LO         = $a2       ;    .. lo byte. Updated by IRQ every 1/60 sec
+        &ubyte  STATUS          = $90       ; kernal status variable for I/O
+        &ubyte  STKEY           = $91       ; various keyboard statuses (updated by IRQ)
+        &ubyte  SHFLAG          = $d3       ; various modifier key status (updated by IRQ)
+        &ubyte  SFDX            = $d4       ; current key pressed (matrix value) (updated by IRQ)
+        &ubyte  COLOR           = $f1       ; cursor color
+
+        &uword  IERROR          = $0300
+        &uword  IMAIN           = $0302
+        &uword  ICRNCH          = $0304
+        &uword  IQPLOP          = $0306
+        &uword  IGONE           = $0308
+        &uword  IEVAL           = $030a
+        &uword  ICRNCH2         = $030c
+        &uword  IQPLOP2         = $030e
+        &uword  IGONE2          = $0310
+        ; $0312 and $0313 are unused.
+        &uword  CINV            = $0314     ; IRQ vector (in ram)
+        &uword  CBINV           = $0316     ; BRK vector (in ram)
+        &uword  NMINV           = $0318     ; NMI vector (in ram)
+        &uword  IOPEN           = $031a
+        &uword  ICLOSE          = $031c
+        &uword  ICHKIN          = $031e
+        &uword  ICKOUT          = $0320
+        &uword  ICLRCH          = $0322
+        &uword  IBASIN          = $0324
+        &uword  IBSOUT          = $0326
+        &uword  ISTOP           = $0328
+        &uword  IGETIN          = $032a
+        &uword  ICLALL          = $032c
+        &uword  IEXMON          = $032e
+        &uword  ILOAD           = $0330
+        &uword  ISAVE           = $0332
+
+        &uword  NMI_VEC         = $FFFA     ; 6502 nmi vector, determined by the kernal if banked in
+        &uword  RESET_VEC       = $FFFC     ; 6502 reset vector, determined by the kernal if banked in
+        &uword  IRQ_VEC         = $FFFE     ; 6502 interrupt vector, determined by the kernal if banked in
+
+        ; the default addresses for the character screen chars and colors
+        const  uword  Screen    = $0400     ; to have this as an array[40*25] the compiler would have to support array size > 255
+        const  uword  Colors    = $d800     ; to have this as an array[40*25] the compiler would have to support array size > 255
+
+; ---- kernal routines, these are the same as on the Commodore-64 (hence the same block name) ----
+
+; STROUT --> use txt.print
+; CLEARSCR -> use txt.clear_screen
+; HOMECRSR -> use txt.home or txt.plot
+
+extsub $FA65 = IRQDFRT() clobbers(A,X,Y)                        ; default IRQ routine
+extsub $FF33 = IRQDFEND() clobbers(A,X,Y)                       ; default IRQ end/cleanup
+
+extsub $FF81 = CINT() clobbers(A,X,Y)                           ; (alias: SCINIT) initialize screen editor and video chip
+extsub $FF84 = IOINIT() clobbers(A, X)                          ; initialize I/O devices (CIA, SID, IRQ)
+extsub $FF87 = RAMTAS() clobbers(A,X,Y)                         ; initialize RAM, tape buffer, screen
+extsub $FF8A = RESTOR() clobbers(A,X,Y)                         ; restore default I/O vectors
+extsub $FF8D = VECTOR(uword userptr @ XY, bool dir @ Pc) clobbers(A,Y)     ; read/set I/O vector table
+extsub $FF90 = SETMSG(ubyte value @ A)                          ; set Kernal message control flag
+extsub $FF93 = SECOND(ubyte address @ A) clobbers(A)            ; (alias: LSTNSA) send secondary address after LISTEN
+extsub $FF96 = TKSA(ubyte address @ A) clobbers(A)              ; (alias: TALKSA) send secondary address after TALK
+extsub $FF99 = MEMTOP(uword address @ XY, bool dir @ Pc) -> uword @ XY     ; read/set top of memory  pointer
+extsub $FF9C = MEMBOT(uword address @ XY, bool dir @ Pc) -> uword @ XY     ; read/set bottom of memory  pointer
+extsub $FF9F = SCNKEY() clobbers(A,X,Y)                         ; scan the keyboard
+extsub $FFA2 = SETTMO(ubyte timeout @ A)                        ; set time-out flag for IEEE bus
+extsub $FFA5 = ACPTR() -> ubyte @ A                             ; (alias: IECIN) input byte from serial bus
+extsub $FFA8 = CIOUT(ubyte databyte @ A)                        ; (alias: IECOUT) output byte to serial bus
+extsub $FFAB = UNTLK() clobbers(A)                              ; command serial bus device to UNTALK
+extsub $FFAE = UNLSN() clobbers(A)                              ; command serial bus device to UNLISTEN
+extsub $FFB1 = LISTEN(ubyte device @ A) clobbers(A)             ; command serial bus device to LISTEN
+extsub $FFB4 = TALK(ubyte device @ A) clobbers(A)               ; command serial bus device to TALK
+extsub $FFB7 = READST() -> ubyte @ A                            ; read I/O status word  (use CLEARST to reset it to 0)
+extsub $FFBA = SETLFS(ubyte logical @ A, ubyte device @ X, ubyte secondary @ Y)   ; set logical file parameters
+extsub $FFBD = SETNAM(ubyte namelen @ A, str filename @ XY)     ; set filename parameters
+extsub $FFC0 = OPEN() clobbers(X,Y) -> bool @Pc, ubyte @A      ; (via 794 ($31A)) open a logical file
+extsub $FFC3 = CLOSE(ubyte logical @ A) clobbers(A,X,Y)         ; (via 796 ($31C)) close a logical file
+extsub $FFC6 = CHKIN(ubyte logical @ X) clobbers(A,X) -> bool @Pc    ; (via 798 ($31E)) define an input channel
+extsub $FFC9 = CHKOUT(ubyte logical @ X) clobbers(A,X)          ; (via 800 ($320)) define an output channel
+extsub $FFCC = CLRCHN() clobbers(A,X)                           ; (via 802 ($322)) restore default devices
+extsub $FFCF = CHRIN() clobbers(X, Y) -> ubyte @ A   ; (via 804 ($324)) input a character (for keyboard, read a whole line from the screen) A=byte read.
+extsub $FFD2 = CHROUT(ubyte character @ A)                           ; (via 806 ($326)) output a character
+extsub $FFD5 = LOAD(ubyte verify @ A, uword address @ XY) -> bool @Pc, ubyte @ A, uword @ XY     ; (via 816 ($330)) load from device
+extsub $FFD8 = SAVE(ubyte zp_startaddr @ A, uword endaddr @ XY) -> bool @ Pc, ubyte @ A          ; (via 818 ($332)) save to a device
+extsub $FFDB = SETTIM(ubyte low @ A, ubyte middle @ X, ubyte high @ Y)      ; set the software clock
+extsub $FFDE = RDTIM() -> ubyte @ A, ubyte @ X, ubyte @ Y       ; read the software clock (A=lo,X=mid,Y=high)
+extsub $FFE1 = STOP() clobbers(X) -> bool @ Pz, ubyte @ A       ; (via 808 ($328)) check the STOP key (and some others in A)     also see STOP2
+extsub $FFE4 = GETIN() clobbers(X,Y) -> bool @Pc, ubyte @ A     ; (via 810 ($32A)) get a character       also see GETIN2
+extsub $FFE7 = CLALL() clobbers(A,X)                            ; (via 812 ($32C)) close all files
+extsub $FFEA = UDTIM() clobbers(A,X)                            ; update the software clock
+extsub $FFED = SCREEN() -> ubyte @ X, ubyte @ Y                 ; get current window dimensions into X (columns) and Y (rows)  NOTE: changed behavior compared to VIC/C64/PET SCREEN() routine!
+extsub $FFED = SCRORG() -> ubyte @ X, ubyte @ Y                 ; get current window dimensions into X (columns) and Y (rows)  NOTE: changed behavior compared to VIC/C64/PET SCREEN() routine!
+extsub $FFF0 = PLOT(ubyte col @ Y, ubyte row @ X, bool dir @ Pc) clobbers(A) -> ubyte @ Y, ubyte @ X       ; read/set position of cursor on screen (Y=column, X=row).  Also see txt.plot
+extsub $FFF3 = IOBASE() -> uword @ XY                           ; read base address of I/O devices
+
+; ---- end of C64 compatible ROM kernal routines ----
+
+; ---- utilities -----
+
+inline asmsub STOP2() clobbers(X,A) -> bool @Pz  {
+    ; -- just like STOP, but omits the special keys result value in A.
+    ;    just for convenience because most of the times you're only interested in the stop pressed or not status.
+    %asm {{
+        jsr  cbm.STOP
+    }}
+}
+
+inline asmsub GETIN2() clobbers(X,Y) -> ubyte @A {
+    ; -- just like GETIN, but omits the carry flag result value.
+    ;    just for convenience because GETIN is so often used to just read keyboard input,
+    ;    where you don't have to deal with a potential error status
+    %asm {{
+        jsr  cbm.GETIN
+    }}
+}
+
+asmsub RDTIM16() clobbers(X) -> uword @AY {
+    ; --  like RDTIM() but only returning the lower 16 bits in AY for convenience
+    %asm {{
+        jsr  cbm.RDTIM
+        pha
+        txa
+        tay
+        pla
+        rts
+    }}
+}
+
+asmsub SETTIML(long jiffies @R0R1) {
+    ; -- just like SETTIM, but with a single 32 bit (lower 24 bits used) argument.
+    %asm {{
+        lda  cx16.r0
+        ldx  cx16.r0+1
+        ldy  cx16.r0+2
+        jmp  SETTIM
+    }}
+}
+
+asmsub RDTIML() clobbers(X) -> long @R0R1 {
+    ; --  like RDTIM() and returning the timer value as a 32 bit (lower 24 bits used) value.
+    %asm {{
+        jsr  RDTIM
+        sta  cx16.r0
+        stx  cx16.r0+1
+        sty  cx16.r0+2
+        lda  #0
+        sta  cx16.r0+3
+        rts
+    }}
+}
+
+sub CLEARST() {
+    ; -- Set the ST status variable back to 0. (there's no direct kernal call for this)
+    ;    Note: a drive error state (blinking led) isn't cleared! You can use diskio.status() to clear that.
+    SETNAM(0, $0000)
+    SETLFS(15, 3, 15)
+    void OPEN()
+    CLOSE(15)
+}
+
+asmsub kbdbuf_clear() {
+    ; -- convenience helper routine to clear the keyboard buffer
+    %asm {{
+-       jsr  GETIN
+        cmp  #0
+        bne  -
+        rts
+    }}
+}
+
+}
+
+c64 {
+        ; C64 I/O registers (VIC, SID, CIA)
+
+        ; the default locations of the 8 sprite pointers (store address of sprite / 64)
+        &ubyte  SPRPTR0         = 2040
+        &ubyte  SPRPTR1         = 2041
+        &ubyte  SPRPTR2         = 2042
+        &ubyte  SPRPTR3         = 2043
+        &ubyte  SPRPTR4         = 2044
+        &ubyte  SPRPTR5         = 2045
+        &ubyte  SPRPTR6         = 2046
+        &ubyte  SPRPTR7         = 2047
+        &ubyte[8]  SPRPTR       = 2040      ; the 8 sprite pointers as an array.
+
+
+; ---- VIC-II 6567/6569/856x registers ----
+
+        &ubyte  SP0X            = $d000
+        &ubyte  SP0Y            = $d001
+        &ubyte  SP1X            = $d002
+        &ubyte  SP1Y            = $d003
+        &ubyte  SP2X            = $d004
+        &ubyte  SP2Y            = $d005
+        &ubyte  SP3X            = $d006
+        &ubyte  SP3Y            = $d007
+        &ubyte  SP4X            = $d008
+        &ubyte  SP4Y            = $d009
+        &ubyte  SP5X            = $d00a
+        &ubyte  SP5Y            = $d00b
+        &ubyte  SP6X            = $d00c
+        &ubyte  SP6Y            = $d00d
+        &ubyte  SP7X            = $d00e
+        &ubyte  SP7Y            = $d00f
+        &ubyte[16]  SPXY        = $d000        ; the 8 sprite X and Y registers as an array.
+        &uword[8] @nosplit SPXYW  = $d000        ; the 8 sprite X and Y registers as a combined xy word array.
+
+        &ubyte  MSIGX           = $d010
+        &ubyte  SCROLY          = $d011
+        &ubyte  RASTER          = $d012
+        &ubyte  LPENX           = $d013
+        &ubyte  LPENY           = $d014
+        &ubyte  SPENA           = $d015
+        &ubyte  SCROLX          = $d016
+        &ubyte  YXPAND          = $d017
+        &ubyte  VMCSB           = $d018
+        &ubyte  VICIRQ          = $d019
+        &ubyte  IREQMASK        = $d01a
+        &ubyte  SPBGPR          = $d01b
+        &ubyte  SPMC            = $d01c
+        &ubyte  XXPAND          = $d01d
+        &ubyte  SPSPCL          = $d01e
+        &ubyte  SPBGCL          = $d01f
+
+        &ubyte  EXTCOL          = $d020        ; border color
+        &ubyte  BGCOL0          = $d021        ; screen color
+        &ubyte  BGCOL1          = $d022
+        &ubyte  BGCOL2          = $d023
+        &ubyte  BGCOL4          = $d024
+        &ubyte  SPMC0           = $d025
+        &ubyte  SPMC1           = $d026
+        &ubyte  SP0COL          = $d027
+        &ubyte  SP1COL          = $d028
+        &ubyte  SP2COL          = $d029
+        &ubyte  SP3COL          = $d02a
+        &ubyte  SP4COL          = $d02b
+        &ubyte  SP5COL          = $d02c
+        &ubyte  SP6COL          = $d02d
+        &ubyte  SP7COL          = $d02e
+        &ubyte[8]  SPCOL        = $d027
+
+
+; ---- end of VIC-II registers ----
+
+; ---- CIA 6526 1 & 2 registers ----
+
+        &ubyte  CIA1PRA         = $DC00        ; CIA 1 DRA, keyboard column drive (and joystick control port #2)
+        &ubyte  CIA1PRB         = $DC01        ; CIA 1 DRB, keyboard row port (and joystick control port #1)
+        &ubyte  CIA1DDRA        = $DC02        ; CIA 1 DDRA, keyboard column
+        &ubyte  CIA1DDRB        = $DC03        ; CIA 1 DDRB, keyboard row
+        &ubyte  CIA1TAL         = $DC04        ; CIA 1 timer A low byte
+        &ubyte  CIA1TAH         = $DC05        ; CIA 1 timer A high byte
+        &ubyte  CIA1TBL         = $DC06        ; CIA 1 timer B low byte
+        &ubyte  CIA1TBH         = $DC07        ; CIA 1 timer B high byte
+        &ubyte  CIA1TOD10       = $DC08        ; time of day, 1/10 sec.
+        &ubyte  CIA1TODSEC      = $DC09        ; time of day, seconds
+        &ubyte  CIA1TODMMIN     = $DC0A        ; time of day, minutes
+        &ubyte  CIA1TODHR       = $DC0B        ; time of day, hours
+        &ubyte  CIA1SDR         = $DC0C        ; Serial Data Register
+        &ubyte  CIA1ICR         = $DC0D
+        &ubyte  CIA1CRA         = $DC0E
+        &ubyte  CIA1CRB         = $DC0F
+
+        &ubyte  CIA2PRA         = $DD00        ; CIA 2 DRA, serial port and video address
+        &ubyte  CIA2PRB         = $DD01        ; CIA 2 DRB, RS232 port / USERPORT
+        &ubyte  CIA2DDRA        = $DD02        ; CIA 2 DDRA, serial port and video address
+        &ubyte  CIA2DDRB        = $DD03        ; CIA 2 DDRB, RS232 port / USERPORT
+        &ubyte  CIA2TAL         = $DD04        ; CIA 2 timer A low byte
+        &ubyte  CIA2TAH         = $DD05        ; CIA 2 timer A high byte
+        &ubyte  CIA2TBL         = $DD06        ; CIA 2 timer B low byte
+        &ubyte  CIA2TBH         = $DD07        ; CIA 2 timer B high byte
+        &ubyte  CIA2TOD10       = $DD08        ; time of day, 1/10 sec.
+        &ubyte  CIA2TODSEC      = $DD09        ; time of day, seconds
+        &ubyte  CIA2TODMIN      = $DD0A        ; time of day, minutes
+        &ubyte  CIA2TODHR       = $DD0B        ; time of day, hours
+        &ubyte  CIA2SDR         = $DD0C        ; Serial Data Register
+        &ubyte  CIA2ICR         = $DD0D
+        &ubyte  CIA2CRA         = $DD0E
+        &ubyte  CIA2CRB         = $DD0F
+
+; ---- end of CIA registers ----
+
+; ---- SID 6581/8580 registers ----
+
+        &ubyte  FREQLO1         = $D400        ; channel 1 freq lo
+        &ubyte  FREQHI1         = $D401        ; channel 1 freq hi
+        &uword  FREQ1           = $D400        ; channel 1 freq (word)
+        &ubyte  PWLO1           = $D402        ; channel 1 pulse width lo (7-0)
+        &ubyte  PWHI1           = $D403        ; channel 1 pulse width hi (11-8)
+        &uword  PW1             = $D402        ; channel 1 pulse width (word)
+        &ubyte  CR1             = $D404        ; channel 1 voice control register
+        &ubyte  AD1             = $D405        ; channel 1 attack & decay
+        &ubyte  SR1             = $D406        ; channel 1 sustain & release
+        &ubyte  FREQLO2         = $D407        ; channel 2 freq lo
+        &ubyte  FREQHI2         = $D408        ; channel 2 freq hi
+        &uword  FREQ2           = $D407        ; channel 2 freq (word)
+        &ubyte  PWLO2           = $D409        ; channel 2 pulse width lo (7-0)
+        &ubyte  PWHI2           = $D40A        ; channel 2 pulse width hi (11-8)
+        &uword  PW2             = $D409        ; channel 2 pulse width (word)
+        &ubyte  CR2             = $D40B        ; channel 2 voice control register
+        &ubyte  AD2             = $D40C        ; channel 2 attack & decay
+        &ubyte  SR2             = $D40D        ; channel 2 sustain & release
+        &ubyte  FREQLO3         = $D40E        ; channel 3 freq lo
+        &ubyte  FREQHI3         = $D40F        ; channel 3 freq hi
+        &uword  FREQ3           = $D40E        ; channel 3 freq (word)
+        &ubyte  PWLO3           = $D410        ; channel 3 pulse width lo (7-0)
+        &ubyte  PWHI3           = $D411        ; channel 3 pulse width hi (11-8)
+        &uword  PW3             = $D410        ; channel 3 pulse width (word)
+        &ubyte  CR3             = $D412        ; channel 3 voice control register
+        &ubyte  AD3             = $D413        ; channel 3 attack & decay
+        &ubyte  SR3             = $D414        ; channel 3 sustain & release
+        &ubyte  FCLO            = $D415        ; filter cutoff lo (2-0)
+        &ubyte  FCHI            = $D416        ; filter cutoff hi (10-3)
+        &uword  FC              = $D415        ; filter cutoff (word)
+        &ubyte  RESFILT         = $D417        ; filter resonance and routing
+        &ubyte  MVOL            = $D418        ; filter mode and main volume control
+        &ubyte  POTX            = $D419        ; potentiometer X
+        &ubyte  POTY            = $D41A        ; potentiometer Y
+        &ubyte  OSC3            = $D41B        ; channel 3 oscillator value read
+        &ubyte  ENV3            = $D41C        ; channel 3 envelope value read
+
+    ; ---- end of SID registers ----
+
+}
+
+c128 {
+; ---- C128 specific registers ----
+
+    &ubyte  VM1     = $0A2C         ; shadow for VUC $d018 in text mode
+    &ubyte  VM2     = $0A2D         ; shadow for VIC $d018 in bitmap screen mode
+    &ubyte  VM3     = $0A2E         ; starting page for VDC screen mem
+    &ubyte  VM4     = $0A2F         ; starting page for VDC attribute mem
+    &ubyte  MMUCR   = $ff00         ; MMU control register
+    &ubyte SCREEN_MODE = $d7        ; 40 or 80 column mode active?
+
+
+extsub $FF47 = SPIN_SPOUT() clobbers(A)                         ; set up serial bus for fast communications mode
+extsub $FF4A = CLOSE_ALL(ubyte device @X)  clobbers(X)          ; close all channels to specific device
+extsub $FF4D = C64_MODE()                                       ; restart machine in C64 mode (does not return)
+extsub $FF50 = DMA_CALL(ubyte bank @X, ubyte command @Y) clobbers(A,X) ; send a command to a DMA device
+extsub $FF53 = BOOT_CALL(ubyte device @X, ubyte drive @A) clobbers(A,X,Y) ; try to autoboot the given disk
+extsub $FF56 = PHOENIX() clobbers(A,X,Y)                        ; search for and autostart ROMs, cartridges, then default disk
+extsub $FF59 = LKUPLA(ubyte lfn @A) -> bool @Pc, ubyte @X       ; look up logical file number to see if it's open; returns device
+extsub $FF5C = LKUPSA(ubyte sa @Y) -> bool @Pc, ubyte @A, ubyte @X ; look up secondary address to see if it's in use; returns lfn and device
+extsub $FF5F = SWAPPER() clobbers(A,X,Y)                        ; swap active screen (between 40- and 80-column) (see set40/set80 if you want to do it idempotently)
+extsub $FF62 = DLCHR() clobbers(A,X,Y)                          ; copy character ROM into VDC video RAM
+extsub $FF65 = PFKEY(ubyte zpaddr @A, ubyte key @X, ubyte length @Y) ; redefine programmable function key (string descriptor in zp, addr in A)
+extsub $FF68 = SETBNK(ubyte data_bank @A, ubyte filename_bank @X) ; set memory bank for load/save
+extsub $FF6B = GETCFG(ubyte bank @X) -> ubyte @A                ; translate bank number to MMU configuration register value
+extsub $FF6E = JSRFAR() clobbers(A,X)                           ; call routine in another bank (parameters set in zero page addresses 2-8)
+extsub $FF71 = JMPFAR() clobbers(A,X)                           ; jump without return to another bank (parameters set as for JSRFAR)
+extsub $FF74 = INDFET(ubyte zpaddr @A, ubyte bank @X, ubyte offset @Y) clobbers(X) -> ubyte @A ; fetch byte from another bank (address in zp, ptr in A)
+extsub $FF77 = INDSTA(ubyte value @A, ubyte bank @X, ubyte offset @Y) clobbers(X) ; store byte to another bank (address in zp, ptr in $02b9)
+extsub $FF7A = INDCMP(ubyte value @A, ubyte bank @X, ubyte offset @Y) clobbers(X) -> bool @Pz, bool @Pc, bool @Pv; compare byte in another bank (address in zp, ptr in $02c8)
+extsub $FF7D = PRIMM()                                          ; print immediate string  (the 0-terminated string immediately following the JSR PRIMM instruction)
+
+
+; ---- C128 specific system utility routines: ----
+
+inline asmsub banks(ubyte banks @A) {
+    ; -- set the memory bank configuration MMU register
+    %asm {{
+        sta  MMUCR
+    }}
+}
+
+inline asmsub getbanks() -> ubyte @A {
+    ; -- get the current memory bank configuration from the MMU register
+    %asm {{
+        lda  MMUCR
+    }}
+}
+
+asmsub  disable_basic() clobbers(A) {
+    %asm {{
+        lda $0a04   ; disable BASIC shadow registers
+        and #$fe
+        sta $0a04
+
+        lda #$01    ; disable BASIC IRQ service routine
+        sta $12fd
+
+        lda #$ff    ; disable screen editor IRQ setup
+        sta $d8
+
+        lda #$b7    ; skip programmable function key check
+        sta $033c
+
+        lda #$0e    ; bank out BASIC ROM
+        sta MMUCR
+        rts
+    }}
+}
+
+asmsub  disable_fkey_macros() {
+    %asm {{
+        lda  #183
+        sta  828
+        rts
+    }}
+}
+
+asmsub  enable_fkey_macros() {
+    %asm {{
+        lda  #173
+        sta  828
+        rts
+    }}
+}
+
+
+asmsub  x16jsrfar() {
+    %asm {{
+        ; setup a JSRFAR call (using X16 call convention)
+        ; see https://cx16.dk/c128-kernal-routines/jsrfar.html
+        sty  $08                ; save registers
+        stx  $07
+        sta  $06
+        php                    ; including PSR
+        pla
+        sta  $05
+
+        pla                    ; get original return address
+        sta  $fa                ; and store it in a temp ZP pointer
+        pla
+        sta  $fb
+
+        ldy  #$01
+        lda  ($fa),y            ; grab low byte of target address
+        sta  $04
+        iny
+        lda  ($fa),y            ; now the high byte
+        sta  $03
+        iny
+        lda  ($fa),y            ; then the target bank
+        sta  $02
+
+        ; replace the original return address by it + 3 to skip the data bytes
+        clc
+        lda  $fa
+        adc  #3
+        sta  $fa
+        lda  $fb
+        adc  #0
+        pha
+        lda  $fa
+        pha
+
+        jsr c128.JSRFAR        ; call kernal's jsrfar routine
+
+        lda  $05                ; populate registers
+        pha
+        lda  $06
+        ldx  $07
+        ldy  $08
+        plp
+
+        rts                    ; and return
+    }}
+}
+
+asmsub fast() {
+    ; -- enable 2 MHz cpu mode, blanks VIC screen
+    %asm {{
+        lda  #10
+        sta  $d011           ; disable VIC-II display
+        lda  $d030
+        ora  #$01            ; Set FAST bit
+        sta  $d030
+        rts
+    }}
+}
+
+asmsub slow() {
+    ; -- disable 2 MHz cpu mode, makes VIC screen visible
+    %asm {{
+        lda  $d030
+        and  #$fe            ; clear FAST bit
+        sta  $d030
+        lda  #27
+        sta  $d011           ; enable VIC-II display
+        rts
+    }}
+}
+
+sub is80() -> bool {
+    ; -- return true if 80 column mode is active, false if 40 column mode is active
+     return SCREEN_MODE & $80 == $80
+}
+
+sub set40() {
+    ; -- set 40 column mode.
+    if is80() SWAPPER()
+}
+
+sub set80() {
+    ; -- set 80 column mode.
+    if not is80() SWAPPER()
+}
+
+
+; ---- end of C128 specific system utility routines ----
+
+}
+
+%import shared_sys_functions
+
+sys {
+    ; ------- lowlevel system routines --------
+
+    const ubyte target = 128         ;  compilation target specifier.  255=virtual, 254=llvm64, 253=llvm32, 252=llvm16, 128=C128, 64=C64, 32=PET, 16=CommanderX16, 8=atari800XL, 7=Neo6502
+
+    const ubyte SIZEOF_BOOL  = sizeof(bool)
+    const ubyte SIZEOF_BYTE  = sizeof(byte)
+    const ubyte SIZEOF_UBYTE = sizeof(ubyte)
+    const ubyte SIZEOF_WORD  = sizeof(word)
+    const ubyte SIZEOF_UWORD = sizeof(uword)
+    const ubyte SIZEOF_LONG  = sizeof(long)
+    const ubyte SIZEOF_POINTER = sizeof(&sys.wait)
+    const ubyte SIZEOF_FLOAT = sizeof(float)
+    const byte  MIN_BYTE     = -128
+    const byte  MAX_BYTE     = 127
+    const ubyte MIN_UBYTE    = 0
+    const ubyte MAX_UBYTE    = 255
+    const word  MIN_WORD     = -32768
+    const word  MAX_WORD     = 32767
+    const uword MIN_UWORD    = 0
+    const uword MAX_UWORD    = 65535
+    const long  MIN_LONG     = -2147483648
+    const long  MAX_LONG     = 2147483647
+    ; MIN_FLOAT and MAX_FLOAT are defined in the floats module if imported
+
+
+    sub  disable_runstop_and_charsetswitch() {
+        p8_sys_startup.disable_runstop_and_charsetswitch()
+    }
+
+    sub  enable_runstop_and_charsetswitch() {
+        p8_sys_startup.enable_runstop_and_charsetswitch()
+    }
+
+
+asmsub  set_irq(uword handler @AY) clobbers(A)  {
+	%asm {{
+	    php
+		sei
+        sta  _vector
+        sty  _vector+1
+		lda  #<_irq_handler
+		sta  cbm.CINV
+		lda  #>_irq_handler
+		sta  cbm.CINV+1
+		plp
+		rts
+_irq_handler
+        jsr  sys.save_prog8_internals
+        cld
+
+        jsr  _run_custom
+        pha
+        jsr  sys.restore_prog8_internals
+        pla
+        beq  +
+		jmp  cbm.IRQDFRT		; continue with normal kernal irq routine
++		lda  #$ff
+		sta  c64.VICIRQ			; acknowledge raster irq
+		lda  c64.CIA1ICR		; acknowledge CIA1 interrupt
+		pla
+		tay
+		pla
+		tax
+		pla
+		rti
+_run_custom
+		jmp  (_vector)
+		.section BSS
+_vector	.word ?
+		.send BSS
+        ; !notreached!
+		}}
+}
+
+asmsub  restore_irq() clobbers(A) {
+	%asm {{
+	    php
+		sei
+		lda  #<cbm.IRQDFRT
+		sta  cbm.CINV
+		lda  #>cbm.IRQDFRT
+		sta  cbm.CINV+1
+		lda  #1
+		sta  c64.IREQMASK	; enable raster irq
+		lda  #%10000001
+		sta  c64.CIA1ICR	; restore CIA1 irq
+		plp
+		rts
+	}}
+}
+
+asmsub  set_rasterirq(uword handler @AY, uword rasterpos @R0) clobbers(A) {
+	%asm {{
+	    php
+        sei
+        sta  user_vector
+        sty  user_vector+1
+
+        lda  #%01111111
+        sta  c64.CIA1ICR    ; "switch off" interrupts signals from cia-1
+        sta  c64.CIA2ICR    ; "switch off" interrupts signals from cia-2
+        lda  c64.CIA1ICR    ; ack previous irq
+        lda  c64.CIA2ICR    ; ack previous irq
+        lda  cx16.r0
+        ldy  cx16.r0+1
+        jsr  sys.set_rasterline
+        lda  #%00000001
+        sta  c64.IREQMASK   ; enable raster interrupt signals from vic
+
+        lda  #<_raster_irq_handler
+        sta  cbm.CINV
+        lda  #>_raster_irq_handler
+        sta  cbm.CINV+1
+        plp
+        rts
+
+_raster_irq_handler
+		jsr  sys.save_prog8_internals
+		cld
+
+        jsr  _run_custom
+        pha
+		jsr  sys.restore_prog8_internals
+        lda  #$ff
+        sta  c64.VICIRQ			; acknowledge raster irq
+		pla
+		beq  +
+		jmp  cbm.IRQDFRT        ; continue with kernal irq routine
++		pla
+		tay
+		pla
+		tax
+		pla
+		rti
+_run_custom
+		jmp  (user_vector)
+		.section BSS
+user_vector	.word ?
+		.send BSS
+
+        ; !notreached!
+	}}
+}
+
+    asmsub update_rasterirq(uword handler @AY, uword rasterpos @R0) clobbers(A) {
+        ; -- just update the IRQ handler and raster line position for the raster IRQ
+        ;    this is much more efficient than calling set_rasterirq() again every time.
+        ;    (but you have to call that one initially at least once to setup the prog8 handler itself)
+        %asm {{
+            php
+            sei
+            sta  sys.set_rasterirq.user_vector
+            sty  sys.set_rasterirq.user_vector+1
+            lda  cx16.r0L
+            ldy  cx16.r0H
+            jsr  sys.set_rasterline
+            plp
+            rts
+        }}
+    }
+
+    asmsub  set_rasterline(uword line @AY) {
+        ; -- only set a new raster line for the raster IRQ
+        %asm {{
+            sta  c64.RASTER     ; set the raster line number where interrupt should occur
+            lda  c64.SCROLY
+            and  #%01111111
+            cpy  #0
+            beq  +
+            ora  #%10000000
+    +       sta  c64.SCROLY     ; clear most significant bit of raster position
+            rts
+        }}
+    }
+
+    asmsub  reset_system()  {
+        ; Soft-reset the system back to initial power-on Basic prompt.
+        %asm {{
+            sei
+            lda  #%00001110
+            sta  c128.MMUCR      ; KERNAL in, BASIC ROM out: this code may be above $3fff
+            jmp  (cbm.RESET_VEC)
+        }}
+    }
+
+    asmsub wait(uword jiffies @AY) {
+        ; --- wait approximately the given number of jiffies (1/60th seconds) (N or N+1)
+        ;     note: the system irq handler has to be active for this to work as it depends on the system jiffy clock
+        %asm {{
+            stx  P8ZP_SCRATCH_B1
+            sta  P8ZP_SCRATCH_W1
+            sty  P8ZP_SCRATCH_W1+1
+
+_loop       lda  P8ZP_SCRATCH_W1
+            ora  P8ZP_SCRATCH_W1+1
+            bne  +
+            ldx  P8ZP_SCRATCH_B1
+            rts
+
++           lda  cbm.TIME_LO
+            sta  P8ZP_SCRATCH_B1
+-           lda  cbm.TIME_LO
+            cmp  P8ZP_SCRATCH_B1
+            beq  -
+
+            lda  P8ZP_SCRATCH_W1
+            bne  +
+            dec  P8ZP_SCRATCH_W1+1
++           dec  P8ZP_SCRATCH_W1
+            jmp  _loop
+        }}
+    }
+
+    asmsub waitvsync() clobbers(A) {
+        ; --- busy wait till the next vsync has occurred (approximately), without depending on custom irq handling.
+        ;     note: a more accurate way to wait for vsync is to set up a vsync irq handler instead.
+        %asm {{
+-           bit  c64.SCROLY
+            bpl  -
+-           bit  c64.SCROLY
+            bmi  -
+            rts
+        }}
+    }
+
+    inline asmsub waitrastborder() {
+        ; --- busy wait till the raster position has reached the bottom screen border (approximately)
+        ;     note: a more accurate way to do this is by using a raster irq handler instead.
+        %asm {{
+-           bit  c64.SCROLY
+            bpl  -
+        }}
+    }
+
+    asmsub waitrasterline(uword line @AY) {
+        ; -- CPU busy wait until the given raster line is reached
+        %asm {{
+            cpy  #0
+            bne  _larger
+-           cmp  c64.RASTER
+            bne  -
+            bit  c64.SCROLY
+            bmi  -
+            rts
+_larger
+            cmp  c64.RASTER
+            bne  _larger
+            bit  c64.SCROLY
+            bpl  _larger
+            rts
+        }}
+    }
+
+
+    inline asmsub disable_caseswitch() {
+        %asm {{
+            lda  #$80
+            sta  247
+        }}
+    }
+
+    inline asmsub enable_caseswitch() {
+        %asm {{
+            lda  #0
+            sta  247
+        }}
+    }
+
+    asmsub exit(ubyte returnvalue @A) {
+        ; -- exit the program with a return code in A. When invoked from Prog8 via sys.exit(), all active defers in the call chain are unwound program-wide (LIFO) before system cleanup. sys.reset_system()/poweroff_system() do not run defers.
+        %asm {{
+            sta  p8_sys_startup.cleanup_at_exit._exitcode
+            ldx  prog8_lib.orig_stackpointer
+            txs
+            jmp  p8_sys_startup.cleanup_at_exit
+        }}
+    }
+
+    asmsub exit2(ubyte resulta @A, ubyte resultx @X, ubyte resulty @Y) {
+        ; -- exit the program with result values in A, X and Y. When invoked from Prog8 via sys.exit2(), all active defers are unwound program-wide (LIFO) before system cleanup.
+        %asm {{
+            sta  p8_sys_startup.cleanup_at_exit._exitcode
+            stx  p8_sys_startup.cleanup_at_exit._exitcodeX
+            sty  p8_sys_startup.cleanup_at_exit._exitcodeY
+            ldx  prog8_lib.orig_stackpointer
+            txs
+            jmp  p8_sys_startup.cleanup_at_exit
+        }}
+    }
+
+    asmsub exit3(ubyte resulta @A, ubyte resultx @X, ubyte resulty @Y, bool carry @Pc) {
+        ; -- exit the program with result values in A, X, Y and carry. When invoked from Prog8 via sys.exit3(), all active defers are unwound program-wide (LIFO) before system cleanup.
+        %asm {{
+            sta  p8_sys_startup.cleanup_at_exit._exitcode
+            lda  #0
+            rol  a
+            sta  p8_sys_startup.cleanup_at_exit._exitcarry
+            stx  p8_sys_startup.cleanup_at_exit._exitcodeX
+            sty  p8_sys_startup.cleanup_at_exit._exitcodeY
+            ldx  prog8_lib.orig_stackpointer
+            txs
+            jmp  p8_sys_startup.cleanup_at_exit
+        }}
+    }
+
+    inline asmsub push_returnaddress(uword address @XY) {
+        %asm {{
+            ; push like JSR would:  address-1,  MSB first then LSB
+            cpx  #0
+            bne  +
+            dey
++           dex
+            tya
+            pha
+            txa
+            pha
+        }}
+    }
+
+    asmsub get_as_returnaddress(uword address @XY) -> uword @AX {
+        %asm {{
+            ; return the address like JSR would push onto the stack:  address-1,  MSB first then LSB
+            cpx  #0
+            bne  +
+            dey
++           dex
+            tya
+            rts
+        }}
+    }
+
+    sub cpu_is_65816() -> bool {
+        ; Returns true when you have a 65816 cpu, false when it's a 6502.
+        ; The SuperCPU expansion for the C64/C128 contains a 65816.
+        %asm {{
+			php
+			clv
+			.byte $e2, $ea  ; SEP #$ea, should be interpreted as 2 NOPs by 6502. 65c816 will set the Overflow flag.
+			bvc +
+			lda #1
+			plp
+			rts
++			lda #0
+			plp
+			rts
+        }}
+    }
+}
+
+cx16 {
+    ; the sixteen virtual 16-bit registers that the CX16 has defined in the zeropage
+    ; they are simulated on the C128 as well but their location in memory is different
+    ; (because there's no room for them in the zeropage)
+    ; $1300-$1bff is unused RAM on C128.
+    &uword r0  = $1be0
+    &uword r1  = $1be2
+    &uword r2  = $1be4
+    &uword r3  = $1be6
+    &uword r4  = $1be8
+    &uword r5  = $1bea
+    &uword r6  = $1bec
+    &uword r7  = $1bee
+    &uword r8  = $1bf0
+    &uword r9  = $1bf2
+    &uword r10 = $1bf4
+    &uword r11 = $1bf6
+    &uword r12 = $1bf8
+    &uword r13 = $1bfa
+    &uword r14 = $1bfc
+    &uword r15 = $1bfe
+
+    ; signed word versions
+    &word r0s  = $1be0
+    &word r1s  = $1be2
+    &word r2s  = $1be4
+    &word r3s  = $1be6
+    &word r4s  = $1be8
+    &word r5s  = $1bea
+    &word r6s  = $1bec
+    &word r7s  = $1bee
+    &word r8s  = $1bf0
+    &word r9s  = $1bf2
+    &word r10s = $1bf4
+    &word r11s = $1bf6
+    &word r12s = $1bf8
+    &word r13s = $1bfa
+    &word r14s = $1bfc
+    &word r15s = $1bfe
+
+    ; signed long versions
+    &long r0r1sl  = $1be0
+    &long r2r3sl  = $1be4
+    &long r4r5sl  = $1be8
+    &long r6r7sl  = $1bec
+    &long r8r9sl  = $1bf0
+    &long r10r11sl = $1bf4
+    &long r12r13sl = $1bf8
+    &long r14r15sl = $1bfc
+
+    ; ubyte versions (low and high bytes)
+    &ubyte r0L  = $1be0
+    &ubyte r1L  = $1be2
+    &ubyte r2L  = $1be4
+    &ubyte r3L  = $1be6
+    &ubyte r4L  = $1be8
+    &ubyte r5L  = $1bea
+    &ubyte r6L  = $1bec
+    &ubyte r7L  = $1bee
+    &ubyte r8L  = $1bf0
+    &ubyte r9L  = $1bf2
+    &ubyte r10L = $1bf4
+    &ubyte r11L = $1bf6
+    &ubyte r12L = $1bf8
+    &ubyte r13L = $1bfa
+    &ubyte r14L = $1bfc
+    &ubyte r15L = $1bfe
+
+    &ubyte r0H  = $1be1
+    &ubyte r1H  = $1be3
+    &ubyte r2H  = $1be5
+    &ubyte r3H  = $1be7
+    &ubyte r4H  = $1be9
+    &ubyte r5H  = $1beb
+    &ubyte r6H  = $1bed
+    &ubyte r7H  = $1bef
+    &ubyte r8H  = $1bf1
+    &ubyte r9H  = $1bf3
+    &ubyte r10H = $1bf5
+    &ubyte r11H = $1bf7
+    &ubyte r12H = $1bf9
+    &ubyte r13H = $1bfb
+    &ubyte r14H = $1bfd
+    &ubyte r15H = $1bff
+
+    ; signed byte versions (low and high bytes)
+    &byte r0sL  = $1be0
+    &byte r1sL  = $1be2
+    &byte r2sL  = $1be4
+    &byte r3sL  = $1be6
+    &byte r4sL  = $1be8
+    &byte r5sL  = $1bea
+    &byte r6sL  = $1bec
+    &byte r7sL  = $1bee
+    &byte r8sL  = $1bf0
+    &byte r9sL  = $1bf2
+    &byte r10sL = $1bf4
+    &byte r11sL = $1bf6
+    &byte r12sL = $1bf8
+    &byte r13sL = $1bfa
+    &byte r14sL = $1bfc
+    &byte r15sL = $1bfe
+
+    &byte r0sH  = $1be1
+    &byte r1sH  = $1be3
+    &byte r2sH  = $1be5
+    &byte r3sH  = $1be7
+    &byte r4sH  = $1be9
+    &byte r5sH  = $1beb
+    &byte r6sH  = $1bed
+    &byte r7sH  = $1bef
+    &byte r8sH  = $1bf1
+    &byte r9sH  = $1bf3
+    &byte r10sH = $1bf5
+    &byte r11sH = $1bf7
+    &byte r12sH = $1bf9
+    &byte r13sH = $1bfb
+    &byte r14sH = $1bfd
+    &byte r15sH = $1bff
+
+    ; boolean versions (low and high bytes)
+    &bool r0bL  = $1be0
+    &bool r1bL  = $1be2
+    &bool r2bL  = $1be4
+    &bool r3bL  = $1be6
+    &bool r4bL  = $1be8
+    &bool r5bL  = $1bea
+    &bool r6bL  = $1bec
+    &bool r7bL  = $1bee
+    &bool r8bL  = $1bf0
+    &bool r9bL  = $1bf2
+    &bool r10bL = $1bf4
+    &bool r11bL = $1bf6
+    &bool r12bL = $1bf8
+    &bool r13bL = $1bfa
+    &bool r14bL = $1bfc
+    &bool r15bL = $1bfe
+
+    &bool r0bH  = $1be1
+    &bool r1bH  = $1be3
+    &bool r2bH  = $1be5
+    &bool r3bH  = $1be7
+    &bool r4bH  = $1be9
+    &bool r5bH  = $1beb
+    &bool r6bH  = $1bed
+    &bool r7bH  = $1bef
+    &bool r8bH  = $1bf1
+    &bool r9bH  = $1bf3
+    &bool r10bH = $1bf5
+    &bool r11bH = $1bf7
+    &bool r12bH = $1bf9
+    &bool r13bH = $1bfb
+    &bool r14bH = $1bfd
+    &bool r15bH = $1bff
+
+
+    asmsub save_virtual_registers() clobbers(A,Y) {
+        %asm {{
+            ldy  #31
+    -       lda  cx16.r0,y
+            sta  _cx16_vreg_storage,y
+            dey
+            bpl  -
+            rts
+
+            .section BSS
+    _cx16_vreg_storage
+            .word ?,?,?,?,?,?,?,?
+            .word ?,?,?,?,?,?,?,?
+            .send BSS
+            ; !notreached!
+        }}
+    }
+
+    asmsub restore_virtual_registers() clobbers(A,Y) {
+        %asm {{
+            ldy  #31
+    -       lda  save_virtual_registers._cx16_vreg_storage,y
+            sta  cx16.r0,y
+            dey
+            bpl  -
+            rts
+        }}
+    }
+}
+
+p8_sys_startup {
+    ; program startup and shutdown machinery. Needs to reside in normal system ram.
+
+asmsub  init_system()  {
+    ; Initializes the machine to a sane starting state.
+    ; Called automatically by the loader program logic.
+    ; This means that the KERNAL ROM and I/O are banked in and the BASIC ROM is out,
+    ; the VIC, SID and CIA chips are reset, screen is cleared, and the default IRQ is set.
+    ; Also a different color scheme is chosen to identify ourselves a little.
+    ; Uppercase charset is activated.
+    %asm {{
+        sei
+        lda  #%00001110
+        sta  c128.MMUCR      ; bank out basic rom so we have ram from $1c00-$bfff
+        jsr  cbm.IOINIT
+        jsr  cbm.RESTOR
+        jsr  cbm.CINT
+        lda  #6
+        sta  c64.EXTCOL
+        lda  #7
+        sta  cbm.COLOR
+        lda  #0
+        sta  c64.BGCOL0
+        jsr  disable_runstop_and_charsetswitch
+        jsr  c128.disable_fkey_macros
+        ; basic is not banked in, adjust MEMTOP
+        ldx  #<$c000
+        ldy  #>$c000
+        clc
+        jsr  cbm.MEMTOP
+        cli
+        rts
+    }}
+}
+
+asmsub  init_system_phase2()  {
+    %asm {{
+        cld
+        clc
+        clv
+        rts
+    }}
+}
+
+asmsub  cleanup_at_exit() {
+    ; executed when the main subroutine does rts
+    %asm {{
+        lda  #%00001110
+        sta  c128.MMUCR          ; KERNAL in; bank 15 is selected by prog8_c128_exit, below $4000
+        jsr  cbm.CLRCHN		; reset i/o channels
+        jsr  enable_runstop_and_charsetswitch
+        ldx  #<c128.MMUCR
+        ldy  #>c128.MMUCR
+        clc
+        jsr  cbm.MEMTOP     ; adjust MEMTOP to original value again
+        jsr  c128.enable_fkey_macros
+        lda  _exitcarry
+        lsr  a
+        lda  _exitcode
+        ldx  _exitcodeX
+        ldy  _exitcodeY
+        jmp  prog8_c128_exit
+
+        .section BSS
+_exitcarry  .byte ?
+_exitcode   .byte ?
+_exitcodeX  .byte ?
+_exitcodeY  .byte ?
+        .send BSS
+
+        ; !notreached!
+    }}
+}
+
+asmsub  disable_runstop_and_charsetswitch() clobbers(A) {
+    %asm {{
+        lda  #$80
+        sta  247    ; disable charset switching
+        lda  #112
+        sta  808    ; disable run/stop key
+        rts
+    }}
+}
+
+asmsub  enable_runstop_and_charsetswitch() clobbers(A) {
+    %asm {{
+        lda  #0
+        sta  247    ; enable charset switching
+        lda  #110
+        sta  808    ; enable run/stop key
+        rts
+    }}
+}
+
+}
