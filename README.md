@@ -5,6 +5,8 @@ modules, and for each machine its description and the modules that are its
 own.  It is to p8p8 (a Prog8 compiler written in Prog8) what the C library
 is to a C compiler.
 
+Find the p8p8 compiler here: https://github.com/gillham/p8p8
+
 ```
 p8c -lib <this directory> -target plus4 program.p8
 ```
