@@ -25,6 +25,7 @@ targets/                   one directory for each machine or target
     plus4/syslib.p8, textio.p8, ...        and its own modules
     vic20plus3/target.properties           a variant: "library = ../vic20"
     llvm64/, llvm32/, llvm16/              the LLVM targets (not in upstream Prog8)
+triples/                   platforms of the llvm32 target: one properties file each
 VERSION                    which upstream commit prog8lib/ is
 LICENSE
 ```
@@ -77,6 +78,9 @@ nothing more is claimed for those.
 ## What is here that is not upstream's
 
 - `targets/llvm64`, `llvm32`, `llvm16`: the library of the LLVM targets.
+- `triples/`: the triple profiles of the LLVM branch of Prog8 for the 32-bit
+  hosted platforms (WebAssembly with WASI, ARM Linux, RISC-V Linux), as they
+  are there.  p8p8 reads them for `-target llvm32 -triple <name>`.
 - `targets/atari`, `c64os`, `cx16os`, `f256`, `gametank`, `mega65`, `plus4`,
   `vic20...` and the others that Prog8 does not have: custom targets, which
   start from the standard library's modules for a similar machine.
