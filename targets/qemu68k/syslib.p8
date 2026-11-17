@@ -458,7 +458,6 @@ sys {
             rts
 
 .bytes:
-            ; (p8p8: upstream subtracts one from the count here and copies a byte too few)
 .loop_b:
             move.b   (a0)+,(a1)+
             subq.l   #1,d2

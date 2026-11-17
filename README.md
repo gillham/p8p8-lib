@@ -94,7 +94,7 @@ nothing more is claimed for those.
   | `common/buffers.p8`, `common/wavfile.p8`, `common/shared_string_functions.p8`, `common/shared_sys_functions.p8`, `common/shared_cbm_textio_functions.p8` | changes for targets with wider pointers or another byte order, and fixes |
   | `targets/c128/syslib.p8` | the BASIC ROM banked out for programs above $3fff |
   | `targets/pet32/textio.p8`, `targets/pet32/syslib.p8`, `targets/c64/syslib.p8`, `targets/cx16/syslib.p8` | fixes, and the list of targets in `sys.target` |
-  | `targets/qemu68k/syslib.p8` | `sys.memcopy` copied a byte too few when source and target are aligned differently |
+  | `targets/qemu68k/syslib.p8` | the LLVM branch's: `sys.memcopy` copied a byte too few when source and target are aligned differently |
   | `targets/virtual/*`, `targets/amiga500/textio.p8`, `targets/amiga1200/textio.p8`, `targets/qemu68k/textio.p8` | additions for the LLVM branch |
 
 - `common/shared_aligned_long_arena.p8`, `common/shared_hosted_compression.p8`:
