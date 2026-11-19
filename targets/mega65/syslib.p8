@@ -1783,7 +1783,7 @@ _switch0:
             plx
             ply
             plz
-            .cpu "6502"
+            .cpu "default"      ; (back to the CPU the program is assembled for)
             rts
         }}
     }
@@ -1908,7 +1908,7 @@ asmsub  init_system()  {
         ora #%00100000  ; disable function key macros
         clc
         jsr mega65.SYSFLAGS
-        .cpu  "6502"
+        .cpu "default"      ; (back to the CPU the program is assembled for)
         rts
     }}
 }
@@ -1939,7 +1939,7 @@ asmsub  cleanup_at_exit() {
         lda  _exitcode
         ldx  _exitcodeX
         ldy  _exitcodeY
-        .cpu "6502"
+        .cpu "default"      ; (back to the CPU the program is assembled for)
         rts
 
         .section BSS
