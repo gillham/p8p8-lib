@@ -15,6 +15,7 @@
 ; p8c defines before the include:
 ;       p8_overlay_window       where an overlay runs
 ;       p8_overlay_size         the size of that window (whole pages)
+;       p8_overlay_sizes        a table: the size of each overlay's code (words, overlay 1 first)
 ;       p8_overlay_select       the address of the records that name an overlay
 ;       p8_overlay_store        where the overlays are kept (28 bits, a multiple of 64 KB)
 ;       p8_overlay_file         a macro with the file's name as .text
@@ -85,6 +86,16 @@ target  jsr  $ffff
         plp
         rts                     ; to where the thunk was called from
 
+; from the thunk of an ordinary subroutine, which looks itself whether the overlay is
+; there: overlay A into the window, X and Y as they are
+bring_keeping
+        stx  save_x
+        sty  save_y
+        jsr  bring
+        ldx  save_x
+        ldy  save_y
+        rts
+
 ; overlay A into the window, unless it is there (0: whatever is there may stay)
 bring
         cmp  #0
@@ -103,6 +114,21 @@ fetch   lda  current
 ; overlay A between far memory and the window; carry set: into far memory
 transfer
         php
+        pha
+        sec
+        sbc  #1
+        asl  a                  ; its size: only that much is copied
+        tay
+        lda  p8_overlay_sizes,y
+        sta  job_count
+        lda  p8_overlay_sizes+1,y
+        sta  job_count+1
+        ora  job_count
+        bne  +
+        pla                     ; (an overlay with nothing in it)
+        plp
+        rts
++       pla
         tax                     ; its place: the store, and a window's size for each one before it
         lda  #0
         sta  far_place
@@ -265,7 +291,7 @@ job_source_mb   .byte  0
 job_target_mb   .byte  0
                 .byte  $00
                 .byte  $00      ; copy
-                .word  p8_overlay_size
+job_count       .word  0
 job_source      .byte  0, 0, 0
 job_target      .byte  0, 0, 0
                 .byte  0
