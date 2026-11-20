@@ -77,12 +77,17 @@ record
         cmp  #16
         bcc  slow
 body
-        lda  left+1
+        lda  left+1             ; as much at a time as the ROM likes (512 bytes) while
+        cmp  #2                 ; that much is left, then what is left
+        bcc  +
+        lda  #0
+        bra  read
++       lda  left+1
         beq  +
         lda  #255
-        bra  ++
+        bra  read
 +       lda  left
-+       ldx  ptr
+read    ldx  ptr
         ldy  ptr+1
         clc
         jsr  MACPTR
@@ -110,7 +115,7 @@ body
         sta  left+1
         ora  left
         bne  body
-        bra  record
+        jmp  record
 slow
         jsr  byte
         sta  (ptr)
@@ -124,7 +129,7 @@ slow
         lda  left
         ora  left+1
         bne  slow
-        bra  record
+        jmp  record
 done
         jsr  CLRCHN
         lda  #2
