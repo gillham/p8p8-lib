@@ -16,8 +16,8 @@ of numbers in `conv`, and `length`, `ncopy` and `compare` in `strings`.
 for z88dk's z80asm.
 
 - A variable is named as p8p8's Z80 code generator writes it: an underscore,
-  then the scoped name with underscores for the dots.  The parameter `st` of
-  `strings.length` is `_strings_length_st`.
+  then the scoped name with two underscores for each dot.  The parameter `st`
+  of `strings.length` is `_strings__length__st`.
 - A subroutine's parameters are variables: the caller has stored them when
   the assembly runs.  A result is left in a variable marked `@shared` that
   the Prog8 code after the assembly returns.
@@ -28,6 +28,8 @@ for z88dk's z80asm.
 - A variable that only assembly names must be marked `@shared`, or it is taken
   out of the program as unused.
 - There is no `asmsub` on the Z80 yet.
+- An `extsub` without an address is a routine of z88dk's C library, and makes
+  the program one that `zcc` links.
 
 ## Other files
 

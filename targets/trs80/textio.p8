@@ -1,8 +1,8 @@
 ; Prog8 definitions for the Text I/O console routines on the TRS-80 Model I and III
 ; (the trs80 target of p8p8).  The screen is 64 by 16 characters at $3c00; text goes
-; out through the ROM (the target file's console_out), which keeps the cursor's
-; address at $4020.  The keys are the ROM's too.  There are no colors and no reverse
-; video.
+; straight into it (the target file's console_out), at the address that the ROM keeps
+; as its cursor's, $4020.  The keys are the ROM's.  There are no colors, no reverse
+; video and no cursor on the screen.
 
 %import shared_z80_textio
 %import shared_z80_putchar_textio
@@ -14,8 +14,12 @@ txt {
     const ubyte DEFAULT_WIDTH = 64
     const ubyte DEFAULT_HEIGHT = 16
 
+    const ubyte COLUMNS = DEFAULT_WIDTH
+    const ubyte ROWS = DEFAULT_HEIGHT
+
     const uword SCREEN = $3c00          ; the characters of the screen
     &uword cursor = $4020               ; where the ROM writes next: an address in the screen
+    &ubyte cursor_shown = $4022         ; not 0 while the ROM shows the cursor (it keeps the character under it here)
 
     ; the codes of getkey() and waitkey() for the keys that differ between the machines (a key that a machine lacks gets
     ; one that no key gives: 248 up, 249 down, 250 left, 251 right, 252 escape, 253 backspace, 254 break)
@@ -46,12 +50,31 @@ sub home() {
     chrout(28)
 }
 
+sub move_cursor(uword address) {
+    ; ---- where the next character goes.  (The program shows no cursor: the target's console
+    ;      routine writes into the screen's memory itself, and the ROM's cursor is off.)
+    cursor = address
+}
+
 sub plot(ubyte col, ubyte row) {
-    cursor = SCREEN + (row as uword) * DEFAULT_WIDTH + col
+    if col < COLUMNS and row < ROWS
+        move_cursor(SCREEN + (row as uword) * DEFAULT_WIDTH + col)
 }
 
 sub column(ubyte col) {
-    cursor = (cursor & $ffc0) | col
+    move_cursor((cursor & $ffc0) | col)
+}
+
+sub get_cursor() -> ubyte, ubyte {
+    ; ---- the cursor's column and row
+    return get_column(), get_row()
+}
+
+sub cursor_on() {
+    ; ---- there is no cursor to show (see move_cursor)
+}
+
+sub cursor_off() {
 }
 
 sub get_column() -> ubyte {

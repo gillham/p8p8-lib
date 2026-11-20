@@ -28,7 +28,7 @@ strings {
         ; regardless of the size of the string during compilation time. Don’t confuse this with len and sizeof!
         ubyte @shared count
         %asm {{
-            ld  hl,(_strings_length_st)
+            ld  hl,(_strings__length__st)
             ld  b,0
 p8str_length_next:
             ld  a,(hl)
@@ -39,7 +39,7 @@ p8str_length_next:
             jr  nz,p8str_length_next
 p8str_length_end:
             ld  a,b
-            ld  (_strings_length_count),a
+            ld  (_strings__length__count),a
         }}
         return count
     }
@@ -131,9 +131,9 @@ p8str_length_end:
         ; Returns the length of the string that was copied.
         ubyte @shared copied
         %asm {{
-            ld  hl,(_strings_ncopy_source)
-            ld  de,(_strings_ncopy_target)
-            ld  a,(_strings_ncopy_maxlength)
+            ld  hl,(_strings__ncopy__source)
+            ld  de,(_strings__ncopy__target)
+            ld  a,(_strings__ncopy__maxlength)
             ld  c,a
             ld  b,0
 p8str_ncopy_next:
@@ -152,7 +152,7 @@ p8str_ncopy_end:
             xor  a
             ld  (de),a
             ld  a,b
-            ld  (_strings_ncopy_copied),a
+            ld  (_strings__ncopy__copied),a
         }}
         return copied
     }
@@ -180,8 +180,8 @@ p8str_ncopy_end:
         ; comparison operators ==, < etcetera (this will use strcmp automatically).
         byte @shared order
         %asm {{
-            ld  hl,(_strings_compare_st1)
-            ld  de,(_strings_compare_st2)
+            ld  hl,(_strings__compare__st1)
+            ld  de,(_strings__compare__st2)
 p8str_compare_next:
             ld  a,(de)
             ld  b,a
@@ -198,7 +198,7 @@ p8str_compare_differ:
             jr  nc,p8str_compare_end
             ld  a,255
 p8str_compare_end:
-            ld  (_strings_compare_order),a
+            ld  (_strings__compare__order),a
         }}
         return order
     }

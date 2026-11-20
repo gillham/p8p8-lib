@@ -43,11 +43,11 @@ diskio {
         ; -- calls the BDOS (at 5) with the function's number in C and its parameter in DE; what it gives in A
         ubyte @shared answer
         %asm {{
-            ld  a,(_diskio_bdos_function)
+            ld  a,(_diskio__bdos__function)
             ld  c,a
-            ld  de,(_diskio_bdos_parameter)
+            ld  de,(_diskio__bdos__parameter)
             call  5
-            ld  (_diskio_bdos_answer),a
+            ld  (_diskio__bdos__answer),a
         }}
         return answer
     }

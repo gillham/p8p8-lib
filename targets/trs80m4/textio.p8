@@ -13,6 +13,8 @@ txt {
 
     const ubyte DEFAULT_WIDTH = 80
     const ubyte DEFAULT_HEIGHT = 24
+    const ubyte COLUMNS = DEFAULT_WIDTH
+    const ubyte ROWS = DEFAULT_HEIGHT
 
     ; the codes of getkey() and waitkey() for the keys that differ between the machines (a key that a machine lacks gets
     ; one that no key gives: 248 up, 249 down, 250 left, 251 right, 252 escape, 253 backspace, 254 break)
@@ -46,9 +48,9 @@ sub home() {
 sub plot(ubyte col, ubyte row) {
     ; ---- moves the cursor (@VDCTL 3, the row in H and the column in L)
     %asm {{
-        ld  a,(_txt_plot_row)
+        ld  a,(_txt__plot__row)
         ld  h,a
-        ld  a,(_txt_plot_col)
+        ld  a,(_txt__plot__col)
         ld  l,a
         ld  b,3
         ld  a,15
@@ -64,7 +66,7 @@ sub get_row() -> ubyte {
         ld  a,15
         rst  $28
         ld  a,h
-        ld  (_txt_get_row_found),a
+        ld  (_txt__get_row__found),a
     }}
     return found
 }
@@ -76,7 +78,7 @@ sub get_column() -> ubyte {
         ld  a,15
         rst  $28
         ld  a,l
-        ld  (_txt_get_column_found),a
+        ld  (_txt__get_column__found),a
     }}
     return found
 }
@@ -85,14 +87,28 @@ sub column(ubyte col) {
     plot(col, get_row())
 }
 
+sub get_cursor() -> ubyte, ubyte {
+    ; ---- the cursor's column and row
+    return get_column(), get_row()
+}
+
+sub cursor_on() {
+    ; ---- the DOS's codes 14 and 15 show and hide the cursor
+    chrout(14)
+}
+
+sub cursor_off() {
+    chrout(15)
+}
+
 sub setchr(ubyte col, ubyte row, ubyte char) {
     ; ---- puts a character on the screen; the cursor stays (@VDCTL 2, the character in C)
     %asm {{
-        ld  a,(_txt_setchr_row)
+        ld  a,(_txt__setchr__row)
         ld  h,a
-        ld  a,(_txt_setchr_col)
+        ld  a,(_txt__setchr__col)
         ld  l,a
-        ld  a,(_txt_setchr_char)
+        ld  a,(_txt__setchr__char)
         ld  c,a
         ld  b,2
         ld  a,15
@@ -104,14 +120,14 @@ sub getchr(ubyte col, ubyte row) -> ubyte {
     ; ---- the character on the screen (@VDCTL 1)
     ubyte @shared found
     %asm {{
-        ld  a,(_txt_getchr_row)
+        ld  a,(_txt__getchr__row)
         ld  h,a
-        ld  a,(_txt_getchr_col)
+        ld  a,(_txt__getchr__col)
         ld  l,a
         ld  b,1
         ld  a,15
         rst  $28
-        ld  (_txt_getchr_found),a
+        ld  (_txt__getchr__found),a
     }}
     return found
 }

@@ -23,10 +23,10 @@ diskio {
         %asm {{
             ld  hl,p8dio_dos_back
             push  hl
-            ld  hl,(_diskio_dos_function)
+            ld  hl,(_diskio__dos__function)
             push  hl
-            ld  hl,(_diskio_dos_hl_value)
-            ld  de,(_diskio_dos_de_value)
+            ld  hl,(_diskio__dos__hl_value)
+            ld  de,(_diskio__dos__de_value)
             ld  b,0
             ret
 p8dio_dos_back:
@@ -38,7 +38,7 @@ p8dio_dos_back:
 p8dio_dos_fine:
             xor  a
 p8dio_dos_store:
-            ld  (_diskio_dos_answer),a
+            ld  (_diskio__dos__answer),a
         }}
         return answer
     }
@@ -73,14 +73,14 @@ p8dio_dos_store:
         ; -- the next byte of an open file (the ROM's routine at $0013), or $ffff at its end
         uword @shared data
         %asm {{
-            ld  de,(_diskio_get_byte_fcb)
+            ld  de,(_diskio__get_byte__fcb)
             call  $0013
             ld  hl,$ffff
             jr  nz,p8dio_get_store
             ld  l,a
             ld  h,0
 p8dio_get_store:
-            ld  (_diskio_get_byte_data),hl
+            ld  (_diskio__get_byte__data),hl
         }}
         return data
     }
@@ -89,14 +89,14 @@ p8dio_get_store:
         ; -- a byte to an open file (the ROM's routine at $001b)
         bool @shared went
         %asm {{
-            ld  de,(_diskio_put_byte_fcb)
-            ld  a,(_diskio_put_byte_value)
+            ld  de,(_diskio__put_byte__fcb)
+            ld  a,(_diskio__put_byte__value)
             call  $001b
             ld  a,1
             jr  z,p8dio_put_store
             xor  a
 p8dio_put_store:
-            ld  (_diskio_put_byte_went),a
+            ld  (_diskio__put_byte__went),a
         }}
         return went
     }

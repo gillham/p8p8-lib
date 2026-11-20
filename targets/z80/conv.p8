@@ -98,13 +98,13 @@ private sub hexadecimal(^^ubyte number, ubyte bytes) {
     ; each byte from the top one down, in Z80 assembly.  A digit is made with the
     ; decimal-adjust instruction and is a small letter from a on, as in hex_digits.
     %asm {{
-        ld  hl,(_conv_hexadecimal_number)
-        ld  a,(_conv_hexadecimal_bytes)
+        ld  hl,(_conv__hexadecimal__number)
+        ld  a,(_conv__hexadecimal__bytes)
         ld  b,a
         ld  e,a
         ld  d,0
         add  hl,de
-        ld  de,_conv_string_out
+        ld  de,_conv__string_out
 p8conv_hex_byte:
         dec  hl
         ld  a,(hl)
@@ -216,11 +216,11 @@ private sub decimal(^^ubyte number, ^^ubyte out_ptr, ubyte bytes, ubyte digits) 
     ; bytes; each remainder is a digit, which waits on the stack until the last one,
     ; the first of the text, is known.
     %asm {{
-        ld  hl,(_conv_decimal_number)
-        ld  de,(_conv_decimal_out_ptr)
-        ld  a,(_conv_decimal_bytes)
+        ld  hl,(_conv__decimal__number)
+        ld  de,(_conv__decimal__out_ptr)
+        ld  a,(_conv__decimal__bytes)
         ld  c,a
-        ld  a,(_conv_decimal_digits)
+        ld  a,(_conv__decimal__digits)
         ld  b,a
         xor  a
         push  af
@@ -340,7 +340,7 @@ sub  str2uword(str string) -> uword {
     ; ---- the unsigned number that the decimal digits at the start of the string say
     uword @shared result
     %asm {{
-        ld  de,(_conv_str2uword_string)
+        ld  de,(_conv__str2uword__string)
         ld  hl,0
 p8conv_str2uword_digit:
         ld  a,(de)
@@ -359,7 +359,7 @@ p8conv_str2uword_digit:
         inc  de
         jr  p8conv_str2uword_digit
 p8conv_str2uword_end:
-        ld  (_conv_str2uword_result),hl
+        ld  (_conv__str2uword__result),hl
     }}
     return result
 }
@@ -383,7 +383,7 @@ sub  hex2uword(str string) -> uword {
     ;    stops parsing at the first character that's not a hex digit (except leading $)
     uword @shared result
     %asm {{
-        ld  de,(_conv_hex2uword_string)
+        ld  de,(_conv__hex2uword__string)
         ld  hl,0
         ld  a,(de)
         cp  '$'
@@ -411,7 +411,7 @@ p8conv_hex2uword_add:
         inc  de
         jr  p8conv_hex2uword_digit
 p8conv_hex2uword_end:
-        ld  (_conv_hex2uword_result),hl
+        ld  (_conv__hex2uword__result),hl
     }}
     return result
 }

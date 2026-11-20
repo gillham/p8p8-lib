@@ -24,10 +24,10 @@ diskio {
         ;    0 when it went well (the DOS says so with the zero flag), else its error code, or 255.
         ubyte @shared answer
         %asm {{
-            ld  hl,(_diskio_svc_hl_value)
-            ld  de,(_diskio_svc_de_value)
+            ld  hl,(_diskio__svc__hl_value)
+            ld  de,(_diskio__svc__de_value)
             ld  b,0
-            ld  a,(_diskio_svc_number)
+            ld  a,(_diskio__svc__number)
             rst  $28
             jr  z,p8dio_svc_fine
             or  a
@@ -37,7 +37,7 @@ diskio {
 p8dio_svc_fine:
             xor  a
 p8dio_svc_store:
-            ld  (_diskio_svc_answer),a
+            ld  (_diskio__svc__answer),a
         }}
         return answer
     }
@@ -72,7 +72,7 @@ p8dio_svc_store:
         ; -- the next byte of an open file, or $ffff at its end
         uword @shared data
         %asm {{
-            ld  de,(_diskio_get_byte_fcb)
+            ld  de,(_diskio__get_byte__fcb)
             ld  a,3
             rst  $28
             ld  hl,$ffff
@@ -80,7 +80,7 @@ p8dio_svc_store:
             ld  l,a
             ld  h,0
 p8dio_get_store:
-            ld  (_diskio_get_byte_data),hl
+            ld  (_diskio__get_byte__data),hl
         }}
         return data
     }
@@ -89,8 +89,8 @@ p8dio_get_store:
         ; -- a byte to an open file (it goes in C)
         bool @shared went
         %asm {{
-            ld  de,(_diskio_put_byte_fcb)
-            ld  a,(_diskio_put_byte_value)
+            ld  de,(_diskio__put_byte__fcb)
+            ld  a,(_diskio__put_byte__value)
             ld  c,a
             ld  a,4
             rst  $28
@@ -98,7 +98,7 @@ p8dio_get_store:
             jr  z,p8dio_put_store
             xor  a
 p8dio_put_store:
-            ld  (_diskio_put_byte_went),a
+            ld  (_diskio__put_byte__went),a
         }}
         return went
     }
