@@ -41,3 +41,26 @@ p8_overlay_leave_p  .proc
         plp
         rts
         .pend
+
+; after a call into an overlay from the main program: the main program's bank again
+p8_overlay_out      .proc
+        sta  p8_overlay_a
+        lda  p8_overlay_outside
+        jsr  cartbank
+        lda  p8_overlay_a
+        rts
+        .pend
+
+p8_overlay_out_p    .proc
+        php
+        sta  p8_overlay_a
+        pla
+        sta  p8_overlay_p
+        lda  p8_overlay_outside
+        jsr  cartbank
+        lda  p8_overlay_p
+        pha
+        lda  p8_overlay_a
+        plp
+        rts
+        .pend
