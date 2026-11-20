@@ -25,6 +25,7 @@ targets/                   one directory for each machine or target
     plus4/syslib.p8, textio.p8, ...        and its own modules
     vic20plus3/target.properties           a variant: "library = ../vic20"
     llvm64/, llvm32/, llvm16/              the LLVM targets (not in upstream Prog8)
+    cpm/target.properties                  a Z80 machine ("cpu = z80"): CP/M
 triples/                   platforms of the llvm32 target: one properties file each
 VERSION                    which upstream commit prog8lib/ is
 LICENSE
@@ -70,6 +71,7 @@ nothing more is claimed for those.
 | `llvm64` | p8p8 itself is built for it; compared with the reference compiler on macOS, Linux and Windows |
 | `llvm32`, `llvm16` | test programs compared with the reference compiler (WebAssembly, the llvm-mos simulator and the C64) |
 | `virtual` | test programs compared in the reference compiler's virtual machine |
+| `cpm` | a Z80 machine, for p8p8's Z80 code generator, which is a beginning: small test programs print in tnylpo what they print on the host.  Its modules are still llvm16's |
 | `vic20`, `vic20plus3`, `vic20plus24`, `cx16os`, `mc64`, `sim6502` | builds; not run |
 | `atari`, `rp6502`, `w65c816sxb` | builds, for a program with `%launcher none` (these have no BASIC launcher); not run |
 | `c64os` | **broken, being worked on**: does not build with either compiler, because its modules are older than the standard library they sit on |
