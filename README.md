@@ -74,7 +74,7 @@ nothing more is claimed for those.
 | `llvm32`, `llvm16` | test programs compared with the reference compiler (WebAssembly, the llvm-mos simulator and the C64) |
 | `virtual` | test programs compared in the reference compiler's virtual machine |
 | `cpm` | a Z80 machine, for p8p8's Z80 code generator, which is a beginning: the test programs print in tnylpo what they print on the host and what prog8c-llvm's CP/M build prints.  Its modules are still llvm16's; `targets/z80/z80-float.c`, which the Z80 machines share, is linked with a program that uses floats |
-| `trs80` | a Z80 machine: the test programs print on a Model I in trs80gp what they print on the host; not tried on a Model III or a real machine.  Its own `textio`, the rest llvm16's |
+| `trs80` | a Z80 machine: the test programs print on a Model I and on a Model III (TRSDOS 1.3 and LDOS) in trs80gp what they print on the host; not tried on a real machine.  Its own `textio`, the rest llvm16's |
 | `vic20`, `vic20plus3`, `vic20plus24`, `cx16os`, `mc64`, `sim6502` | builds; not run |
 | `atari`, `rp6502`, `w65c816sxb` | builds, for a program with `%launcher none` (these have no BASIC launcher); not run |
 | `c64os` | **broken, being worked on**: does not build with either compiler, because its modules are older than the standard library they sit on |
