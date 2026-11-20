@@ -3,7 +3,7 @@
 ; moved with ANSI sequences.  The keys come through the machine's own routines (the
 ; target file's key_poll), which for CP/M is BDOS function 6.
 
-%import shared_llvm16_stream_textio
+%import shared_z80_stream_textio
 
 txt {
 %option no_symbol_prefixing, ignore_unused

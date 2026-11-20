@@ -4,9 +4,9 @@
 ; address at $4020.  The keys are the ROM's too.  There are no colors and no reverse
 ; video.
 
-%import shared_llvm16_textio
-%import shared_llvm16_putchar_textio
-%import shared_llvm16_input_textio
+%import shared_z80_textio
+%import shared_z80_putchar_textio
+%import shared_z80_input_textio
 
 txt {
 %option no_symbol_prefixing, ignore_unused

@@ -4,9 +4,9 @@
 ; characters on the screen go through the supervisor call @VDCTL (15), in Z80 assembly.
 ; There are no colors; reverse video is the DOS's codes 16 and 17.
 
-%import shared_llvm16_textio
-%import shared_llvm16_putchar_textio
-%import shared_llvm16_input_textio
+%import shared_z80_textio
+%import shared_z80_putchar_textio
+%import shared_z80_input_textio
 
 txt {
 %option no_symbol_prefixing, ignore_unused

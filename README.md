@@ -28,7 +28,7 @@ targets/                   one directory for each machine or target
     cpm/target.properties                  a Z80 machine ("cpu = z80"): CP/M
     trs80/target.properties, textio.p8     a Z80 machine: the TRS-80 Model I and III
     trs80m4/target.properties, textio.p8   a Z80 machine: the TRS-80 Model 4 in its own mode
-    z80/                                   what the Z80 machines share (not a target)
+    z80/                                   the library of the Z80 machines (not a target)
 triples/                   platforms of the llvm32 target: one properties file each
 VERSION                    which upstream commit prog8lib/ is
 LICENSE
@@ -74,8 +74,8 @@ nothing more is claimed for those.
 | `llvm64` | p8p8 itself is built for it; compared with the reference compiler on macOS, Linux and Windows |
 | `llvm32`, `llvm16` | test programs compared with the reference compiler (WebAssembly, the llvm-mos simulator and the C64) |
 | `virtual` | test programs compared in the reference compiler's virtual machine |
-| `cpm` | a Z80 machine, for p8p8's Z80 code generator, which is a beginning: the test programs print in tnylpo what they print on the host and what prog8c-llvm's CP/M build prints.  Its modules are still llvm16's; `targets/z80/z80-float.c`, which the Z80 machines share, is linked with a program that uses floats |
-| `trs80` | a Z80 machine: the test programs print on a Model I and on a Model III (TRSDOS 1.3 and LDOS) in trs80gp what they print on the host; not tried on a real machine.  Its own `textio`, the rest llvm16's |
+| `cpm` | a Z80 machine, for p8p8's Z80 code generator, which is a beginning: the test programs print in tnylpo what they print on the host and what prog8c-llvm's CP/M build prints.  Its modules are those of `targets/z80`, which the Z80 machines share |
+| `trs80` | a Z80 machine: the test programs print on a Model I and on a Model III (TRSDOS 1.3 and LDOS) in trs80gp what they print on the host; not tried on a real machine.  Its own `textio`, the rest from `targets/z80` |
 | `trs80m4` | a Z80 machine: the test programs print on a Model 4 (TRSDOS 6) in trs80gp what they print on the host; not tried on a real machine |
 | `vic20`, `vic20plus3`, `vic20plus24`, `cx16os`, `mc64`, `sim6502` | builds; not run |
 | `atari`, `rp6502`, `w65c816sxb` | builds, for a program with `%launcher none` (these have no BASIC launcher); not run |
