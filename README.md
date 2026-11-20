@@ -26,6 +26,7 @@ targets/                   one directory for each machine or target
     vic20plus3/target.properties           a variant: "library = ../vic20"
     llvm64/, llvm32/, llvm16/              the LLVM targets (not in upstream Prog8)
     cpm/target.properties                  a Z80 machine ("cpu = z80"): CP/M
+    z80/                                   what the Z80 machines share (not a target)
 triples/                   platforms of the llvm32 target: one properties file each
 VERSION                    which upstream commit prog8lib/ is
 LICENSE
@@ -71,7 +72,7 @@ nothing more is claimed for those.
 | `llvm64` | p8p8 itself is built for it; compared with the reference compiler on macOS, Linux and Windows |
 | `llvm32`, `llvm16` | test programs compared with the reference compiler (WebAssembly, the llvm-mos simulator and the C64) |
 | `virtual` | test programs compared in the reference compiler's virtual machine |
-| `cpm` | a Z80 machine, for p8p8's Z80 code generator, which is a beginning: the test programs print in tnylpo what they print on the host and what prog8c-llvm's CP/M build prints.  Its modules are still llvm16's; `z80-float.c` is linked with a program that uses floats |
+| `cpm` | a Z80 machine, for p8p8's Z80 code generator, which is a beginning: the test programs print in tnylpo what they print on the host and what prog8c-llvm's CP/M build prints.  Its modules are still llvm16's; `targets/z80/z80-float.c`, which the Z80 machines share, is linked with a program that uses floats |
 | `vic20`, `vic20plus3`, `vic20plus24`, `cx16os`, `mc64`, `sim6502` | builds; not run |
 | `atari`, `rp6502`, `w65c816sxb` | builds, for a program with `%launcher none` (these have no BASIC launcher); not run |
 | `c64os` | **broken, being worked on**: does not build with either compiler, because its modules are older than the standard library they sit on |
