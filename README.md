@@ -71,7 +71,7 @@ nothing more is claimed for those.
 | `llvm64` | p8p8 itself is built for it; compared with the reference compiler on macOS, Linux and Windows |
 | `llvm32`, `llvm16` | test programs compared with the reference compiler (WebAssembly, the llvm-mos simulator and the C64) |
 | `virtual` | test programs compared in the reference compiler's virtual machine |
-| `cpm` | a Z80 machine, for p8p8's Z80 code generator, which is a beginning: small test programs print in tnylpo what they print on the host.  Its modules are still llvm16's |
+| `cpm` | a Z80 machine, for p8p8's Z80 code generator, which is a beginning: the test programs print in tnylpo what they print on the host and what prog8c-llvm's CP/M build prints.  Its modules are still llvm16's; `z80-float.c` is linked with a program that uses floats |
 | `vic20`, `vic20plus3`, `vic20plus24`, `cx16os`, `mc64`, `sim6502` | builds; not run |
 | `atari`, `rp6502`, `w65c816sxb` | builds, for a program with `%launcher none` (these have no BASIC launcher); not run |
 | `c64os` | **broken, being worked on**: does not build with either compiler, because its modules are older than the standard library they sit on |
