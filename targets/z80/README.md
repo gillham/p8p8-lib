@@ -25,6 +25,8 @@ for z88dk's z80asm.
   and routine (`p8str_length_next`).
 - The code generator adds the `ret` at the end of the subroutine; the
   assembly falls through to it.
+- A variable that only assembly names must be marked `@shared`, or it is taken
+  out of the program as unused.
 - There is no `asmsub` on the Z80 yet.
 
 ## Other files

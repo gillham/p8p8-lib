@@ -75,7 +75,7 @@ nothing more is claimed for those.
 | `llvm32`, `llvm16` | test programs compared with the reference compiler (WebAssembly, the llvm-mos simulator and the C64) |
 | `virtual` | test programs compared in the reference compiler's virtual machine |
 | `cpm` | a Z80 machine, for p8p8's Z80 code generator, which is a beginning: the test programs print in tnylpo what they print on the host and what prog8c-llvm's CP/M build prints.  Its modules are those of `targets/z80`, which the Z80 machines share, with a `textio` and a `diskio` (files through the BDOS) of its own |
-| `trs80` | a Z80 machine: the test programs print on a Model I and on a Model III (TRSDOS 1.3 and LDOS) in trs80gp what they print on the host; not tried on a real machine.  Its own `textio`, the rest from `targets/z80` |
+| `trs80` | a Z80 machine: the test programs print on a Model I and on a Model III (TRSDOS 1.3 and LDOS) in trs80gp what they print on the host; not tried on a real machine.  Its own `textio` and `diskio` (the DOS's calls; the file routines are `targets/z80/shared_trsdos_diskio.p8`), the rest from `targets/z80` |
 | `trs80m4` | a Z80 machine: the test programs print on a Model 4 (TRSDOS 6) in trs80gp what they print on the host; not tried on a real machine |
 | `vic20`, `vic20plus3`, `vic20plus24`, `cx16os`, `mc64`, `sim6502` | builds; not run |
 | `atari`, `rp6502`, `w65c816sxb` | builds, for a program with `%launcher none` (these have no BASIC launcher); not run |
