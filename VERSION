@@ -1,5 +1,5 @@
 prog8lib/ is compiler/res/prog8lib of https://github.com/irmen/prog8
-at commit df16719e72a8751289c56676b1cdf0454ab9e0a9 (master, 2026-11-18, after the 14.0-BETA3 release), unchanged.
+at commit 32f82e9e1646c4e4e67fe9eec2e3d5cd23abb534 (master, 2026-11-21, after the 14.0-BETA3 release), unchanged.
 targets/llvm16, llvm32 and llvm64 are compiler/res/prog8lib/llvm* of the LLVM branch,
 and triples/ is from its codeCore/res/prog8lib/llvm-triples,
-https://github.com/gillham/prog8, at commit e261d6c6d (2026-11-18).
+https://github.com/gillham/prog8, at commit 62101daa8 (2026-11-21).
