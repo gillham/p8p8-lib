@@ -1,4 +1,6 @@
 %import gametank_logo
+%import gametank_audio
+%import gametank_music
 %import shared_compression
 
 gametank {
@@ -77,24 +79,6 @@ gametank {
             BANKREG = bankflip
         }
 
-        ubyte audio_params_index
-        uword wavetable_page
-        ubyte sine_offset
-        &uword WAVE_TABLE_LOCATION = $3002
-        const uword AUDIO_PARAM_INPUT_BUFFER = $3070 
-
-        sub init_audio_coprocessor() {
-            audio_rate = $7f
-            void compression.decode_rle(assets.audio, audio_ram, 4096)
-            audio_params_index = 0
-            AUDIO_PARAM_INPUT_BUFFER[0] = 0
-            audio_reset = 0
-            audio_rate = 255
-            while(WAVE_TABLE_LOCATION == 0) {}
-            wavetable_page = $3000 + WAVE_TABLE_LOCATION
-            sine_offset = @($3003)
-        }
-
         sub init_graphics() {
             frameflip = 0
             draw_busy = false
@@ -108,11 +92,11 @@ gametank {
         ubyte[] logo_colors = [0, 0, 25, 57, 90, 122, 155, 187, 220, 252]
         ubyte[] fadeout_colors = [ 7, 6, 5, 4, 3, 2, 1, 32]
         ubyte logo_state
-        const ubyte BG_COLOR = 32
+        const ubyte BG_COLOR = 31   ; seems more like black (32 in C SDK)
 
         sub sdk_init(){
             init_graphics()
-            logo_state = 0
+            logo_state = 1      ; 0 in C sdk but then "while (++logo_state)"
             do {
                 direct_prepare_box_mode()
                 if(logo_state < 3) {
@@ -120,7 +104,7 @@ gametank {
                     DIRECT_DRAW_COLOR(0, 0, 127, 127, BG_COLOR)
                     if(logo_state == 2) {
                         init_audio_coprocessor()
-                        ;init_music()
+                        init_music()
                     }
                     await_drawing()
                     DIRECT_DRAW_COLOR(127, 0, 1, 127, BG_COLOR)
@@ -141,16 +125,16 @@ gametank {
                 flip_pages()
                 await_vsync(1)
                 if(logo_state == 3) {
-                    ;play_song(ASSET__sdk_default__jingle_mid, REPEAT_NONE)
+                    play_boot_jingle()
                 }
                 if(logo_state > 2) {
-                    ;tick_music()
+                    tick_music()
                 }
                 if(logo_state == 180) logo_state = 255;
 
                 logo_state++
             } until logo_state == 0
-            ;stop_music()
+            stop_music()
             ; set back to sane defaults
             dmaflags = DMA_NMI
             framebuffer_mem(0)
@@ -364,13 +348,6 @@ gametank {
         gametank.dmaflags &= ~DMA_CPU_TO_VRAM
         gametank.DMAFLAGS = gametank.dmaflags
     }
-}
-
-assets {
-audio:
-    %asmbinary "audio_fw.bin.rle", 0, 4096
-;graphics:
-;    %asmbinary "raw_image.bin.rle", 0, 20000
 }
 
 cart {
