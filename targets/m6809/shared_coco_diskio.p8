@@ -10,7 +10,10 @@
 ;
 ; - A name is 8 characters, a dot (or a slash, as BASIC writes it) and 3, taken as
 ;   capitals, with a drive after it at will ("NAME.EXT:1"); without one the drive is
-;   BASIC's default drive.  There are no wildcards.
+;   BASIC's default drive.
+; - The files of a drive are listed with lf_start_list() and lf_next_entry(), or with
+;   list_filenames(): all of them, or those whose name matches a pattern with * and ?
+;   ("*.BAS", "DATA?.*:1").
 ; - A file's length in bytes is kept exactly.
 ; - A file that is written is a data file, as BASIC's OPEN "O" makes one; what save()
 ;   and save_raw() write is marked as binary.
@@ -60,6 +63,7 @@ diskio {
 
     bool reading = false
     ubyte read_drive
+    ubyte read_first            ; the file's first granule
     ubyte read_granule          ; where the next sector is read from
     ubyte read_index            ; which of the granule's sectors
     long read_left              ; bytes of the file that are not in read_sector yet
@@ -276,6 +280,173 @@ diskio {
     }
 
 
+    ; ----- iterative file lister functions -----
+
+    uword list_blocks               ; the file's sectors of 256 bytes
+    str list_filetype = "???"       ; bas (a BASIC program), dat (data), bin (machine language), txt (an editor's text)
+    str list_filename = "?" * 12    ; as "NAME.EXT"
+    bool list_active = false
+    ubyte list_drive
+    ubyte list_sector               ; of the directory: where the next entry is
+    ubyte list_entry                ; and which of its 8
+    ubyte[24] list_pattern          ; in capitals; empty for all files
+
+    sub lf_start_list(str pattern_ptr) -> bool {
+        ; -- start an iterative file listing: all files with 0 or "", or those whose name
+        ;    ("NAME.EXT") matches the pattern, in which ? is any character and * any number
+        ;    of them; capitals and small letters are the same.  A drive can follow it
+        ;    ("*.BAS:1"); without one it is BASIC's default drive.
+        ;    note: only a single iteration loop can be active at a time!
+        list_drive = default_drive
+        ubyte k = 0
+        if pattern_ptr != 0 {
+            while pattern_ptr[k] != 0 and k < 23 {
+                ubyte c = pattern_ptr[k]
+                if c == ':' {
+                    if pattern_ptr[k + 1] >= '0' and pattern_ptr[k + 1] <= '3'
+                        list_drive = pattern_ptr[k + 1] - '0'
+                    break
+                }
+                if c >= 'a' and c <= 'z'
+                    c -= 32
+                if c == '/'
+                    c = '.'
+                list_pattern[k] = c
+                k++
+            }
+        }
+        list_pattern[k] = 0
+        list_sector = FIRST_ENTRY_SECTOR
+        list_entry = 0
+        internal_ok = sector_io(2, list_drive, DIRECTORY_TRACK, list_sector, &other_sector)
+        list_active = internal_ok
+        return internal_ok
+    }
+
+    sub lf_start_list_files(str pattern_ptr) -> bool {
+        return lf_start_list(pattern_ptr)
+    }
+
+    sub lf_start_list_dirs(str pattern_ptr) -> bool {
+        ; -- a disk has no directories below it
+        lf_end_list()
+        return false
+    }
+
+    sub lf_next_entry() -> bool {
+        ; -- retrieve the next entry from an iterative file listing session.
+        ;    results will be found in list_blocks, list_filename, and list_filetype.
+        ;    if it returns false though, there are no more entries (or an error occurred).
+        ;    (Other file routines may be called between two entries: the directory is read again here.)
+        if not list_active
+            return false
+        while list_sector <= LAST_ENTRY_SECTOR {
+            if not sector_io(2, list_drive, DIRECTORY_TRACK, list_sector, &other_sector) {
+                internal_ok = false
+                lf_end_list()
+                return false
+            }
+            while list_entry < 8 {
+                ubyte at = list_entry << 5
+                list_entry++
+                if other_sector[at] == $ff {
+                    lf_end_list()           ; (no entries from here on)
+                    return false
+                }
+                if other_sector[at] != 0 {
+                    ubyte n = 0
+                    ubyte k
+                    for k in 0 to 7 {
+                        if other_sector[at + k] != ' ' {
+                            list_filename[n] = other_sector[at + k]
+                            n++
+                        }
+                    }
+                    if other_sector[at + 8] != ' ' or other_sector[at + 9] != ' ' or other_sector[at + 10] != ' ' {
+                        list_filename[n] = '.'
+                        n++
+                        for k in 8 to 10 {
+                            if other_sector[at + k] != ' ' {
+                                list_filename[n] = other_sector[at + k]
+                                n++
+                            }
+                        }
+                    }
+                    list_filename[n] = 0
+                    if list_pattern[0] == 0 or strings.pattern_match(list_filename, list_pattern) {
+                        when other_sector[at + 11] {
+                            0 -> void strings.copy("bas", list_filetype)
+                            1 -> void strings.copy("dat", list_filetype)
+                            2 -> void strings.copy("bin", list_filetype)
+                            3 -> void strings.copy("txt", list_filetype)
+                            else -> void strings.copy("???", list_filetype)
+                        }
+                        ; its sectors: nine for each granule but the last, which says its own
+                        ubyte granule = other_sector[at + 13]
+                        list_blocks = 0
+                        if sector_io(2, list_drive, DIRECTORY_TRACK, TABLE_SECTOR, &other_sector) {
+                            ubyte steps = 0
+                            while granule < GRANULES and steps < GRANULES {
+                                ubyte next = other_sector[granule]
+                                if next >= LAST {
+                                    list_blocks += next & 15
+                                    break
+                                }
+                                list_blocks += GRANULE_SECTORS
+                                granule = next
+                                steps++
+                            }
+                        }
+                        return true
+                    }
+                }
+            }
+            list_entry = 0
+            list_sector++
+        }
+        lf_end_list()
+        return false
+    }
+
+    sub lf_next_entry_nocase() -> bool {
+        ; -- the same: the names on a disk are in capitals, and a pattern is taken as capitals
+        return lf_next_entry()
+    }
+
+    sub lf_end_list() {
+        ; -- end an iterative file listing session
+        list_active = false
+    }
+
+    sub list_filenames(str pattern_ptr, pointer filenames_buffer, uword filenames_buf_size) -> ubyte {
+        ; -- fill the provided buffer with the names of the files on the disk (until buffer is full).
+        ;    Files in the buffer are separated by a 0 byte. You can provide an optional pattern to match against.
+        ;    filenames_buf_size should be > 20!
+        ;    After the last filename one additional 0 byte is placed to indicate the end of the list.
+        ;    Returns number of files.
+        if filenames_buf_size <= 20
+            return 0
+        pointer buffer_start = filenames_buffer
+        ubyte files_found = 0
+        @(filenames_buffer) = 0
+        if lf_start_list(pattern_ptr) {
+            while lf_next_entry() {
+                filenames_buffer += strings.copy(list_filename, filenames_buffer) + 1
+                files_found++
+                if filenames_buffer - buffer_start > filenames_buf_size - 20
+                    break
+            }
+        }
+        lf_end_list()
+        @(filenames_buffer) = 0
+        return files_found
+    }
+
+    sub list_filenames_nocase(str pattern_ptr, pointer filenames_buffer, uword filenames_buf_size) -> ubyte {
+        return list_filenames(pattern_ptr, filenames_buffer, filenames_buf_size)
+    }
+
+
     ; ----- iterative file loader functions -----
 
     sub f_open(str filenameptr) -> bool {
@@ -311,6 +482,7 @@ diskio {
             steps++
         }
         read_left = read_size
+        read_first = first
         read_granule = first
         read_index = 0
         read_at = SECTOR
@@ -430,8 +602,28 @@ diskio {
     }
 
     sub f_seek(long position) -> bool {
-        ; -- not there yet
-        return false
+        ; -- the place in the file that is read, counted from its start; false when no file
+        ;    is open or the place is after the file's end
+        if not reading or position < 0 or position > read_size
+            return false
+        uword sectors = (position >> 8) as uword
+        uword hops = sectors / GRANULE_SECTORS
+        ubyte granule = read_first
+        while hops != 0 and granule < GRANULES {
+            granule = read_table[granule]
+            hops--
+        }
+        read_granule = granule
+        read_index = lsb(sectors % GRANULE_SECTORS)
+        read_left = read_size - ((sectors as long) << 8)
+        read_at = SECTOR
+        read_valid = SECTOR
+        if read_left == 0
+            return true                     ; (the file's end, where a sector ends)
+        if not next_sector()
+            return false
+        read_at = lsb(position)
+        return true
     }
 
     sub f_tell() -> long, long {

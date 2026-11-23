@@ -12,7 +12,8 @@ and the reading of numbers in `conv`, and `length`, `ncopy` and `compare` in
 `textio` of both Color Computers: the 32 by 16 text screen at $0400, with
 BASIC's cursor address.  `shared_coco_diskio.p8` is their `diskio`: Disk
 BASIC's files (the directory and the granule table handled here), through
-the ROM's sector routine DSKCON alone.
+the ROM's sector routine DSKCON alone; a name or a list's pattern takes a
+drive (`"*.BAS:1"`).  `strings.pattern_match` is here in Prog8.
 
 `shared_sam_highram.p8` is the `highram` module of the Color Computer 2 and the
 Dragons: the upper 32 KB of a 64 KB machine as memory for data, switched in

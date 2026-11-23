@@ -431,6 +431,64 @@ strings {
         return 255
     }
 
+    sub pattern_match(str string, str pattern) -> bool {
+        ; -- does the string match the pattern, in which ? is any one character and * any number of them
+        ubyte s = 0
+        ubyte p = 0
+        ubyte star_p = 255          ; the pattern's last star, and how far into the string it was tried
+        ubyte star_s = 0
+        while string[s] != 0 {
+            if pattern[p] == '*' {
+                star_p = p
+                star_s = s
+                p++
+            }
+            else if pattern[p] == '?' or pattern[p] == string[s] {
+                s++
+                p++
+            }
+            else if star_p != 255 {
+                p = star_p + 1
+                star_s++
+                s = star_s
+            }
+            else
+                return false
+        }
+        while pattern[p] == '*'
+            p++
+        return pattern[p] == 0
+    }
+
+    sub pattern_match_nocase(str string, str lowercase_pattern, bool iso) -> bool {
+        ; -- pattern_match() with the string's capitals taken as small letters (the pattern's are small ones)
+        ubyte s = 0
+        ubyte p = 0
+        ubyte star_p = 255
+        ubyte star_s = 0
+        while string[s] != 0 {
+            if lowercase_pattern[p] == '*' {
+                star_p = p
+                star_s = s
+                p++
+            }
+            else if lowercase_pattern[p] == '?' or lowercase_pattern[p] == lowerchar(string[s]) {
+                s++
+                p++
+            }
+            else if star_p != 255 {
+                p = star_p + 1
+                star_s++
+                s = star_s
+            }
+            else
+                return false
+        }
+        while lowercase_pattern[p] == '*'
+            p++
+        return lowercase_pattern[p] == 0
+    }
+
     sub next_token(str source, str delimiters) -> str {
         ; -- Tokenize the source string according to the list of delimiter characters. Like C's ``strtok`` function.
         if source == 0
