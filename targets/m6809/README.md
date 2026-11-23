@@ -38,4 +38,5 @@ for lwasm.
   none and gets one).
 - Floats are those of the BASIC in the machine's ROM (the target file's
   `float_...` keys say where its routines are); `shared_coco_floats.p8` is
-  the Color Computers' `floats` module.
+  the Color Computers' `floats` module, `shared_dragon_floats.p8` the Dragons'
+  (the same with the Dragon ROM's addresses).
