@@ -17,7 +17,8 @@ drive (`"*.BAS:1"`).  `strings.pattern_match` is here in Prog8.
 
 `shared_sam_highram.p8` is the `highram` module of the Color Computer 2 and the
 Dragons: the upper 32 KB of a 64 KB machine as memory for data, switched in
-for the moment of each access.
+for the moment of each access.  (The Color Computer 3's `highram`, in its
+own directory, is its memory blocks beyond the 64 KB, with long addresses.)
 
 ## 6809 assembly in a module
 

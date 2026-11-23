@@ -83,7 +83,7 @@ nothing more is claimed for those.
 | `trs80` | a Z80 machine: the test programs print on a Model I and on a Model III (TRSDOS 1.3 and LDOS) in trs80gp what they print on the host; not tried on a real machine.  Its own `textio` and `diskio` (the DOS's calls; the file routines are `targets/z80/shared_trsdos_diskio.p8`), the rest from `targets/z80` |
 | `trs80m4` | a Z80 machine: the test programs print on a Model 4 (TRSDOS 6) in trs80gp what they print on the host; not tried on a real machine |
 | `sim6809` | a 6809 machine, for p8p8's 6809 code generator, which is a beginning: the test programs without floats print in usim09batch what they print on the host |
-| `coco2`, `coco3` | 6809 machines: the same programs print in XRoar's Color Computer 2 and 3 what they print on the host; not tried on a real machine.  `coco3` also writes to the 40 and 80 column screens |
+| `coco2`, `coco3` | 6809 machines: the same programs print in XRoar's Color Computer 2 and 3 what they print on the host; not tried on a real machine.  `coco3` also writes to the 40 and 80 column screens, and its `highram` is the memory beyond the 64 KB (384 KB of 512 KB) |
 | `coco2ram` | the same programs, and the file test, in XRoar's Color Computer 2 with 64 KB; not tried on a real machine |
 | `dragon32`, `dragon64` | 6809 machines: the same programs print in XRoar's Dragon 32 and Dragon 64 what they print on the host; not tried on a real machine; no `diskio` |
 | `vic20`, `vic20plus3`, `vic20plus24`, `cx16os`, `mc64`, `sim6502` | builds; not run |
