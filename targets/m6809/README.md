@@ -7,7 +7,9 @@ Not a target: there is no `target.properties` here.  The 6809 targets
 The modules are those of the llvm16 target: Prog8 with `%ir` blocks for what
 the machine has to do (system calls).  `shared_coco_textio.p8` is the
 `textio` of both Color Computers: the 32 by 16 text screen at $0400, with
-BASIC's cursor address.
+BASIC's cursor address.  `shared_coco_diskio.p8` is their `diskio`: Disk
+BASIC's files (the directory and the granule table handled here), through
+the ROM's sector routine DSKCON alone.
 
 ## 6809 assembly in a module
 
