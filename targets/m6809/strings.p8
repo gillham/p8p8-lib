@@ -26,9 +26,18 @@ strings {
         ; Returns the number of bytes in the string.
         ; This value is determined during runtime and counts upto the first terminating 0 byte in the string,
         ; regardless of the size of the string during compilation time. Don’t confuse this with len and sizeof!
-        ubyte count = 0
-        while st[count]!=0
-            count++
+        ubyte @shared count
+        %asm {{
+            ldx  _strings__length__st
+            clrb
+            p8str_length_next:
+            lda  ,x+
+            beq  p8str_length_end
+            incb
+            bne  p8str_length_next
+            p8str_length_end:
+            stb  _strings__length__count
+        }}
         return count
     }
 
@@ -117,16 +126,24 @@ strings {
     sub ncopy(str source, str target, ubyte maxlength) -> ubyte {
         ; Copy a string to another, overwriting that one, but limited to the given length.
         ; Returns the length of the string that was copied.
-        ubyte ix = 0
-        while ix<maxlength {
-            ubyte char = source[ix]
-            if char==0
-                break
-            target[ix] = char
-            ix++
-        }
-        target[ix] = 0
-        return ix
+        ubyte @shared copied
+        %asm {{
+            ldx  _strings__ncopy__source
+            ldu  _strings__ncopy__target
+            clrb
+            p8str_ncopy_next:
+            cmpb  _strings__ncopy__maxlength
+            bhs  p8str_ncopy_end
+            lda  ,x+
+            beq  p8str_ncopy_end
+            sta  ,u+
+            incb
+            bra  p8str_ncopy_next
+            p8str_ncopy_end:
+            clr  ,u
+            stb  _strings__ncopy__copied
+        }}
+        return copied
     }
 
     sub append(str target, str suffix) -> ubyte {
@@ -150,19 +167,26 @@ strings {
         ; Returns -1 (255), 0 or 1, meaning: string1 sorts before, equal or after string2.
         ; Note that you can also directly compare strings and string values with each other using
         ; comparison operators ==, < etcetera (this will use strcmp automatically).
-        repeat {
-            ubyte char1 = st1^^
-            ubyte char2 = st2^^
-            if char1!=char2 {
-                if char1<char2
-                    return -1
-                return 1
-            }
-            if char1==0
-                return 0
-            st1++
-            st2++
-        }
+        byte @shared order
+        %asm {{
+            ldx  _strings__compare__st1
+            ldu  _strings__compare__st2
+            p8str_compare_next:
+            lda  ,x+
+            cmpa  ,u+
+            bne  p8str_compare_differ
+            tsta
+            bne  p8str_compare_next
+            clrb
+            bra  p8str_compare_end
+            p8str_compare_differ:
+            ldb  #1
+            bhs  p8str_compare_end
+            ldb  #255
+            p8str_compare_end:
+            stb  _strings__compare__order
+        }}
+        return order
     }
 
     sub compare_nocase(str st1, str st2) -> byte {
