@@ -27,5 +27,8 @@ for lwasm.
   does not reach.
 - The code generator adds the `rts` at the end of the subroutine; the
   assembly falls through to it.
-- There is no `asmsub` and no `extsub` on the 6809 yet, and there are no
-  floats.
+- An `asmsub`, and an `extsub` at an address, name the 6809's registers:
+  `A` and `B` for a byte, `D`, `X`, `Y` and `U` for a word, `Pc` for the
+  carry.  An `asmsub` returns with `rts` itself (one declared `inline` has
+  none and gets one).
+- There are no floats yet.
