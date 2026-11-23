@@ -14,6 +14,10 @@ BASIC's cursor address.  `shared_coco_diskio.p8` is their `diskio`: Disk
 BASIC's files (the directory and the granule table handled here), through
 the ROM's sector routine DSKCON alone.
 
+`shared_sam_highram.p8` is the `highram` module of the Color Computer 2 and the
+Dragons: the upper 32 KB of a 64 KB machine as memory for data, switched in
+for the moment of each access.
+
 ## 6809 assembly in a module
 
 `%asm {{ ... }}` in a subroutine is written into the program as it stands,
