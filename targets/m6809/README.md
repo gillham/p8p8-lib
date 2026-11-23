@@ -23,6 +23,8 @@ for lwasm.
   the Prog8 code after the assembly returns.
 - Labels are the program's as a whole, so each needs a prefix of its module
   and routine.  A label stands at the margin and ends with a colon.
+- A branch is as it is written: the long form (`lbeq`) where the short one
+  does not reach.
 - The code generator adds the `rts` at the end of the subroutine; the
   assembly falls through to it.
 - There is no `asmsub` and no `extsub` on the 6809 yet, and there are no
