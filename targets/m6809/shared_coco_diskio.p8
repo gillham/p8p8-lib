@@ -86,8 +86,23 @@ diskio {
     }
 
     sub have_disk() -> bool {
-        ; -- is Disk BASIC there?  (its ROM begins with "DK")
-        return @($c000) == 'D' and @($c001) == 'K'
+        ; -- is Disk BASIC there?  (its ROM begins with "DK"; looked at as a routine that
+        ;    is called as one of the ROM's, for a program that has the ROMs switched out)
+        bool @shared found
+        %asm {{
+            clr  _diskio__have_disk__found
+            jsr  p8dsk_look  ;rom
+            bra  p8dsk_looked
+            p8dsk_look:
+            ldd  $c000
+            cmpd  #$444b
+            bne  p8dsk_none
+            inc  _diskio__have_disk__found
+            p8dsk_none:
+            rts
+            p8dsk_looked:
+        }}
+        return found
     }
 
     sub sector_io(ubyte operation, ubyte drive, ubyte track, ubyte sector, uword buffer) -> bool {

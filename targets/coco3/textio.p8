@@ -22,8 +22,10 @@ txt {
 
     const uword SCREEN = $0400          ; the 32 column screen
     const uword WIDE_SCREEN = $e000     ; the 40 and 80 column screen, while it is mapped in
-    const ubyte DEFAULT_WIDTH = 32
-    const ubyte DEFAULT_HEIGHT = 16
+    const ubyte DEFAULT_WIDTH = 80      ; the largest screen (a program's arrays for a screen go by these)
+    const ubyte DEFAULT_HEIGHT = 24
+    const ubyte NARROW_WIDTH = 32       ; the 32 column screen
+    const ubyte NARROW_HEIGHT = 16
 
     &uword cursor = $0088               ; BASIC's cursor on the 32 column screen: where the next character goes
     &ubyte wide = $00e7                 ; BASIC's WIDTH: 0 the 32 column screen, 1 the 40 column one, 2 the 80 column one
@@ -127,19 +129,19 @@ sub screen_off() {
 
 sub width() -> ubyte {
     if wide == 0
-        return DEFAULT_WIDTH
+        return NARROW_WIDTH
     return wide_columns
 }
 
 sub height() -> ubyte {
     if wide == 0
-        return DEFAULT_HEIGHT
+        return NARROW_HEIGHT
     return wide_rows
 }
 
 sub  clear_screen() {
     if wide == 0 {
-        sys.memset(SCREEN, DEFAULT_WIDTH as uword * DEFAULT_HEIGHT, $60)
+        sys.memset(SCREEN, NARROW_WIDTH as uword * NARROW_HEIGHT, $60)
         home()
     }
     else
@@ -153,7 +155,7 @@ sub home() {
 sub column(ubyte col) {
     ; ---- move the cursor to the column (0 is the leftmost one) of the current line
     if wide == 0 {
-        if col < DEFAULT_WIDTH
+        if col < NARROW_WIDTH
             cursor = (cursor & $ffe0) + col
     }
     else
@@ -175,8 +177,8 @@ sub get_row() -> ubyte {
 sub  plot  (ubyte col, ubyte row) {
     ; ---- move the cursor to the position, 0,0 is the top left; a position off the screen is ignored
     if wide == 0 {
-        if col < DEFAULT_WIDTH and row < DEFAULT_HEIGHT
-            cursor = SCREEN + row * (DEFAULT_WIDTH as uword) + col
+        if col < NARROW_WIDTH and row < NARROW_HEIGHT
+            cursor = SCREEN + row * (NARROW_WIDTH as uword) + col
         return
     }
     if col < wide_columns and row < wide_rows {
@@ -236,13 +238,13 @@ sub setchr (ubyte col, ubyte row, ubyte char) {
         }
         return
     }
-    if col >= DEFAULT_WIDTH or row >= DEFAULT_HEIGHT
+    if col >= NARROW_WIDTH or row >= NARROW_HEIGHT
         return
     if char < 64
         char += 64
     else if char >= 96 and char < 128
         char -= 96
-    @(SCREEN + row * (DEFAULT_WIDTH as uword) + col) = char
+    @(SCREEN + row * (NARROW_WIDTH as uword) + col) = char
 }
 
 sub getchr (ubyte col, ubyte row) -> ubyte {
@@ -258,9 +260,9 @@ sub getchr (ubyte col, ubyte row) -> ubyte {
         screen_off()
         return char
     }
-    if col >= DEFAULT_WIDTH or row >= DEFAULT_HEIGHT
+    if col >= NARROW_WIDTH or row >= NARROW_HEIGHT
         return 255
-    char = @(SCREEN + row * (DEFAULT_WIDTH as uword) + col)
+    char = @(SCREEN + row * (NARROW_WIDTH as uword) + col)
     if char >= 128 or char >= 64 and char < 96
         return char
     if char >= 96
@@ -301,7 +303,7 @@ sub clear_screenchars(ubyte character) {
         return
     }
     setchr(0, 0, character)
-    sys.memset(SCREEN, DEFAULT_WIDTH as uword * DEFAULT_HEIGHT, @(SCREEN))
+    sys.memset(SCREEN, NARROW_WIDTH as uword * NARROW_HEIGHT, @(SCREEN))
     home()
 }
 

@@ -105,6 +105,37 @@ sys {
         }}
     }
 
+    sub progend() -> uword {
+        ; -- the first address after the program and its variables: memory from here up to
+        ;    the stack is the program's to use (see stack())
+        uword @shared address
+        %asm {{
+            ldd  #p8_bss_end
+            std  _sys__progend__address
+        }}
+        return address
+    }
+
+    sub progstart() -> uword {
+        ; -- where the program begins
+        uword @shared address
+        %asm {{
+            ldd  #p8_start
+            std  _sys__progstart__address
+        }}
+        return address
+    }
+
+    sub stack() -> uword {
+        ; -- the stack pointer as it is in the caller: the stack grows down from here
+        uword @shared address
+        %asm {{
+            leax  2,s
+            stx  _sys__stack__address
+        }}
+        return address
+    }
+
     sub exit(ubyte returnvalue) {
         ; -- exit the program with a return code. All active defers in the call chain are unwound program-wide (LIFO) before the program ends.
         %ir {{

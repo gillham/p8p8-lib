@@ -108,7 +108,7 @@ sub parse(str value) -> float {
         pshs  x
         ldx  #_floats__parse__buffer
         stx  $a6
-        jsr  >$00a5
+        jsr  >$00a5  ;rom
         jsr  $bd12
         puls  x
         stx  $a6
