@@ -74,6 +74,7 @@ prog8_program_entry         ; needed by rom_vectors section
 ; but keep the source in syslib?
 
 cartbank	.block
+p8s_cartbank_value = $01        ; rombank @$01 (simulate C64/X16)
 ; ubyte bank number passeed via A register
 	sta  p8s_cartbank_value
 	sta  p8s_cartbank_pins
@@ -110,7 +111,6 @@ p8_label_cartbank_loop
 p8s_cartbank_loopc  .byte ?
 p8s_cartbank_pins   .byte ?
 p8s_cartbank_temp   .byte ?
-p8s_cartbank_value  .byte ?
         .send BSS
 	.bend
 

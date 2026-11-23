@@ -53,7 +53,7 @@ gametank {
 
         ; match gametank_sdk names as much as possible
         ubyte bankflip
-        ubyte banksMirror
+        &ubyte banksMirror = $00            ; ram bank here
         ubyte frameflip
         ubyte flagsMirror
 
@@ -74,9 +74,10 @@ gametank {
         sub flip_pages() {
             frameflip ^= DMA_PAGE_OUT;
             bankflip ^= BANK_SECOND_FRAMEBUFFER;
-            gametank.dmaflags = DMA_NMI | DMA_ENABLE | DMA_IRQ | DMA_OPAQUE | frameflip | DMA_GCARRY
-            DMAFLAGS = flagsMirror
-            BANKREG = bankflip
+            banksMirror = (banksMirror & ~BANK_SECOND_FRAMEBUFFER) | bankflip
+            flagsMirror = DMA_NMI | DMA_ENABLE | DMA_IRQ | DMA_OPAQUE | frameflip | DMA_GCARRY
+            dma_flags = flagsMirror
+            bank_reg = banksMirror
         }
 
         sub init_graphics() {
@@ -92,7 +93,7 @@ gametank {
         ubyte[] logo_colors = [0, 0, 25, 57, 90, 122, 155, 187, 220, 252]
         ubyte[] fadeout_colors = [ 7, 6, 5, 4, 3, 2, 1, 32]
         ubyte logo_state
-        const ubyte BG_COLOR = 31   ; seems more like black (32 in C SDK)
+        const ubyte BG_COLOR = 32
 
         sub sdk_init(){
             init_graphics()
@@ -136,7 +137,7 @@ gametank {
             } until logo_state == 0
             stop_music()
             ; set back to sane defaults
-            dmaflags = DMA_NMI
+            flagsMirror = DMA_NMI
             framebuffer_mem(0)
         }
 
@@ -154,12 +155,14 @@ gametank {
             %asm {{
                 stx  gametank.BLIT_VX
                 sty  gametank.BLIT_VY
+                eor  #$ff           ; color inversion
                 sta  gametank.BLIT_COLOR
                 lda  cx16.r12L
-                sta  gametank.BLIT_GX
+                sta  gametank.BLIT_WIDTH
                 lda  cx16.r13L
-                sta  gametank.BLIT_GY
+                sta  gametank.BLIT_HEIGHT
                 lda  #1
+                sta  gametank.draw_busy
                 sta  gametank.BLIT_START
             }}
         }
@@ -171,22 +174,20 @@ gametank {
         }
 
 
-    ubyte bankreg
-    ubyte dmaflags
-
     sub blitinit() {
         ; enable blitter
-        gametank.dmaflags |= (DMA_ENABLE|DMA_GCARRY|DMA_IRQ)
-        gametank.DMAFLAGS = gametank.dmaflags
+        flagsMirror |= (DMA_ENABLE|DMA_GCARRY|DMA_IRQ)
+        dma_flags = flagsMirror
 
         ; single pixel blit to set sprite ram quadrant
-        gametank.BLIT_VX = 0
-        gametank.BLIT_VY = 0
-        gametank.BLIT_GX = 0
-        gametank.BLIT_GY = 0
-        gametank.BLIT_WIDTH = 1
-        gametank.BLIT_HEIGHT = 1
-        gametank.BLIT_START = 1
+        BLIT_VX = 0
+        BLIT_VY = 0
+        BLIT_GX = 0
+        BLIT_GY = 0
+        BLIT_WIDTH = 1
+        BLIT_HEIGHT = 1
+        BLIT_COLOR = ~32
+        BLIT_START = 1
 
         ; don't wait for < 5 pixels blits or interrupt is missed
         ; disabling DMA_NMI vsync irq will demonstrate it.
@@ -197,122 +198,126 @@ gametank {
         ; 
         ;sys.wait(1)
         ; disable blitter
-        gametank.dmaflags &= ~DMA_ENABLE
-        gametank.DMAFLAGS = gametank.dmaflags
+        flagsMirror &= ~DMA_ENABLE
+        dma_flags = flagsMirror
     }
 
     sub blitter() {
         ; enable blitter
-        gametank.dmaflags |= (DMA_ENABLE|DMA_GCARRY|DMA_IRQ)
-        gametank.DMAFLAGS = gametank.dmaflags
+        flagsMirror |= (DMA_ENABLE|DMA_GCARRY|DMA_IRQ)
+        dma_flags = flagsMirror
 
         ; configure largest possible blit
-        gametank.BLIT_VX = 1
-        gametank.BLIT_VY = 0
-        gametank.BLIT_GX = 0
-        gametank.BLIT_GY = 0
-        gametank.BLIT_WIDTH = 126
-        gametank.BLIT_HEIGHT = 127
-        gametank.BLIT_START = 1
+        BLIT_VX = 1
+        BLIT_VY = 0
+        BLIT_GX = 0
+        BLIT_GY = 0
+        BLIT_WIDTH = 126
+        BLIT_HEIGHT = 127
+        BLIT_START = 1
 
         ; need to setup blitter interrupt and WAI?
         ; wait for vsync, then blitter, then WAI?
         ;sys.wait(20)
         blitwait()
         ; disable blitter
-        gametank.dmaflags &= ~DMA_ENABLE
+        flagsMirror &= ~DMA_ENABLE
+        dma_flags = flagsMirror
         
     }
 
     sub blitter0() {
         ; enable blitter
-        gametank.dmaflags |= (DMA_ENABLE|DMA_GCARRY|DMA_IRQ)
-        gametank.DMAFLAGS = gametank.dmaflags
+        flagsMirror |= (DMA_ENABLE|DMA_GCARRY|DMA_IRQ)
+        dma_flags = flagsMirror
 
         ; blit one quarter of the screen, minus one pixel on left & right
-        gametank.BLIT_VX = 1
-        gametank.BLIT_VY = 0
-        gametank.BLIT_GX = 0
-        gametank.BLIT_GY = 0
-        gametank.BLIT_WIDTH = 63
-        gametank.BLIT_HEIGHT = 64
-        gametank.BLIT_START = 1
+        BLIT_VX = 1
+        BLIT_VY = 0
+        BLIT_GX = 0
+        BLIT_GY = 0
+        BLIT_WIDTH = 63
+        BLIT_HEIGHT = 64
+        BLIT_START = 1
 
         ; need to setup blitter interrupt and WAI?
         ; wait for vsync, then blitter, then WAI?
         ;sys.wait(20)
         blitwait()
         ; disable blitter
-        gametank.dmaflags &= ~DMA_ENABLE
-        
+        flagsMirror &= ~DMA_ENABLE
+        dma_flags = flagsMirror
     }
 
     sub blitter1() {
         ; enable blitter
-        gametank.dmaflags |= (DMA_ENABLE|DMA_GCARRY|DMA_IRQ)
-        gametank.DMAFLAGS = gametank.dmaflags
+        flagsMirror |= (DMA_ENABLE|DMA_GCARRY|DMA_IRQ)
+        dma_flags = flagsMirror
 
         ; blit one quarter of the screen, minus one pixel on left & right
-        gametank.BLIT_VX = 64
-        gametank.BLIT_VY = 0
-        gametank.BLIT_GX = 64
-        gametank.BLIT_GY = 0
-        gametank.BLIT_WIDTH = 63
-        gametank.BLIT_HEIGHT = 64
-        gametank.BLIT_START = 1
+        BLIT_VX = 64
+        BLIT_VY = 0
+        BLIT_GX = 64
+        BLIT_GY = 0
+        BLIT_WIDTH = 63
+        BLIT_HEIGHT = 64
+        BLIT_START = 1
 
         ; need to setup blitter interrupt and WAI?
         ; wait for vsync, then blitter, then WAI?
         ;sys.wait(20)
         blitwait()
         ; disable blitter
-        gametank.dmaflags &= ~DMA_ENABLE
+        flagsMirror &= ~DMA_ENABLE
+        dma_flags = flagsMirror
         
     }
 
     sub blitter2() {
         ; enable blitter
-        gametank.dmaflags |= (DMA_ENABLE|DMA_GCARRY|DMA_IRQ)
-        gametank.DMAFLAGS = gametank.dmaflags
+        flagsMirror |= (DMA_ENABLE|DMA_GCARRY|DMA_IRQ)
+        dma_flags = flagsMirror
 
         ; blit one quarter of the screen, minus one pixel on left & right
-        gametank.BLIT_VX = 1
-        gametank.BLIT_VY = 64
-        gametank.BLIT_GX = 0
-        gametank.BLIT_GY = 64
-        gametank.BLIT_WIDTH = 63
-        gametank.BLIT_HEIGHT = 64
-        gametank.BLIT_START = 1
+        BLIT_VX = 1
+        BLIT_VY = 64
+        BLIT_GX = 0
+        BLIT_GY = 64
+        BLIT_WIDTH = 63
+        BLIT_HEIGHT = 64
+        BLIT_START = 1
 
         ; need to setup blitter interrupt and WAI?
         ; wait for vsync, then blitter, then WAI?
         ;sys.wait(20)
         blitwait()
         ; disable blitter
-        gametank.dmaflags &= ~DMA_ENABLE
+        flagsMirror &= ~DMA_ENABLE
+        dma_flags = flagsMirror
         
     }
 
     sub blitter3() {
         ; enable blitter
-        gametank.dmaflags |= (DMA_ENABLE|DMA_GCARRY|DMA_IRQ)
-        gametank.DMAFLAGS = gametank.dmaflags
+        flagsMirror |= (DMA_ENABLE|DMA_GCARRY|DMA_IRQ)
+        dma_flags = flagsMirror
 
         ; blit one quarter of the screen, minus one pixel on left & right
-        gametank.BLIT_VX = 64
-        gametank.BLIT_VY = 64
-        gametank.BLIT_GX = 64
-        gametank.BLIT_GY = 64
-        gametank.BLIT_WIDTH = 63
-        gametank.BLIT_HEIGHT = 64
-        gametank.BLIT_START = 1
+        BLIT_VX = 64
+        BLIT_VY = 64
+        BLIT_GX = 64
+        BLIT_GY = 64
+        BLIT_WIDTH = 63
+        BLIT_HEIGHT = 64
+        BLIT_START = 1
 
         ; need to setup blitter interrupt and WAI?
         ; wait for vsync, then blitter, then WAI?
         ;sys.wait(20)
         blitwait()
         ; disable blitter
-        gametank.dmaflags &= ~DMA_ENABLE
+        flagsMirror &= ~DMA_ENABLE
+        dma_flags = flagsMirror
         
     }
 
@@ -325,28 +330,28 @@ gametank {
     ; select framebuffer memory 0 or 1
     sub framebuffer_mem(ubyte unit) {
         ; framebuffer is bit 3
-        gametank.bankreg = (gametank.bankreg & %11110111) | ((unit << 3) & %00001000)
-        gametank.BANKREG = gametank.bankreg
+        banksMirror = (banksMirror & %11110111) | ((unit << 3) & %00001000)
+        bank_reg = banksMirror
         ; enable access to framebuffer ram
-        gametank.dmaflags |= DMA_CPU_TO_VRAM
-        gametank.DMAFLAGS = gametank.dmaflags
+        flagsMirror |= DMA_CPU_TO_VRAM
+        dma_flags = flagsMirror
     }
 
     ; select framebuffer 0 or 1 to output to TV
     sub framebuffer_out(ubyte unit) {
         ; set framebuffer page sent to TV
-        gametank.dmaflags = (gametank.dmaflags & ~DMA_PAGE_OUT) | ((unit << 1) & DMA_PAGE_OUT)
-        gametank.DMAFLAGS = gametank.dmaflags
+        flagsMirror = (flagsMirror & ~DMA_PAGE_OUT) | ((unit << 1) & DMA_PAGE_OUT)
+        dma_flags = flagsMirror
     }
 
     ; select sprite memory bank 0-7
     sub sprite_mem(ubyte bank) {
         ; sprite bank is lowest 3 bits
-        gametank.bankreg = (gametank.bankreg & %11111000) | (bank & %00000111)
-        gametank.BANKREG = gametank.bankreg
+        banksMirror = (banksMirror & %11111000) | (bank & %00000111)
+        bank_reg = banksMirror
         ; enable cpu access to sprite ram
-        gametank.dmaflags &= ~DMA_CPU_TO_VRAM
-        gametank.DMAFLAGS = gametank.dmaflags
+        flagsMirror &= ~DMA_CPU_TO_VRAM
+        dma_flags = flagsMirror
     }
 }
 

@@ -246,9 +246,8 @@ gametank {
 inline asmsub rombank(ubyte bank @A) {
     ; -- set the rom banks
     %asm {{
-        sta  $01        ; cart / rom bank mirror
+        ; cartbank stores A to $01
         jsr  cartbank   ; switch actual cartridge rom bank
-                        ; cartbank should move here in asm.
     }}
 }
 
@@ -293,21 +292,23 @@ inline asmsub getrambank() -> ubyte @A {
     }}
 }
 
-inline asmsub push_rombank(ubyte newbank @A) clobbers(Y) {
+inline asmsub push_rombank(ubyte newbank @A) clobbers(A,Y) {
     ; push the current rombank on the stack and makes the given rom bank active
     ; combined with pop_rombank() makes for easy temporary rom bank switch
     %asm {{
         ldy  $01
         phy
-        sta  $01            ; should call non-inline cart bank switch
+        ; cartbank stores A to $01
+        jsr  cartbank
     }}
 }
 
-inline asmsub pop_rombank() {
+inline asmsub pop_rombank() clobbers(A) {
     ; sets the current rom bank back to what was stored previously on the stack
     %asm {{
         pla
-        sta  $01            ; should call non-inline cart bank switch
+        ; cartbank stores A to $01
+        jsr  cartbank
     }}
 }
 
@@ -381,8 +382,7 @@ inline asmsub numbanks() -> ubyte @A {
             lda  P8ZP_SCRATCH_REG
             pha
             lda  P8ZP_SCRATCH_B1
-            sta  $01                    ; save to bankreg mirror
-            phx                         ; save X also
+            phx                         ; save X also (cartbank stores A to $01)
             jsr  cartbank
             plx                         ; restore after sub call
             lda  P8ZP_SCRATCH_W2
@@ -395,8 +395,7 @@ inline asmsub numbanks() -> ubyte @A {
             pla
             sta  P8ZP_SCRATCH_B1
             pla
-            sta  $01                    ; save to bankreg mirror
-            phx                         ; save X also
+            phx                         ; save X also (cartbank stores A to $01)
             jsr  cartbank
             plx                         ; restore after sub call
             lda  P8ZP_SCRATCH_B1
@@ -1090,9 +1089,7 @@ asmsub  init_system_phase2()  {
 
         ; set cartridge to bank 128 (first *ROM* bank)
         lda  #$80
-        sta  $01
-        jsr  cartbank   ; should be jmp
-        rts
+        jmp  cartbank   ; stores A to $01
     }}
 }
 
