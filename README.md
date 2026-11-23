@@ -31,6 +31,7 @@ targets/                   one directory for each machine or target
     z80/                                   the library of the Z80 machines (not a target)
     coco2/, coco3/                         6809 machines ("cpu = 6809"): the Color Computers
     coco2ram/                              the Color Computer 2 with 64 KB, the program with the ROMs switched out
+    coco3ram/                              the Color Computer 3, the program with memory blocks of its own where BASIC is
     dragon32/, dragon64/                   6809 machines: the Dragons
     sim6809/target.properties, textio.p8   a 6809 machine: a bare 6809 in usim09batch
     m6809/                                 the library of the 6809 machines (not a target)
@@ -85,6 +86,7 @@ nothing more is claimed for those.
 | `sim6809` | a 6809 machine, for p8p8's 6809 code generator, which is a beginning: the test programs without floats print in usim09batch what they print on the host |
 | `coco2`, `coco3` | 6809 machines: the same programs print in XRoar's Color Computer 2 and 3 what they print on the host; not tried on a real machine.  `coco3` also writes to the 40 and 80 column screens, and its `highram` is the memory beyond the 64 KB (384 KB of 512 KB) |
 | `coco2ram` | the same programs, and the file test, in XRoar's Color Computer 2 with 64 KB; not tried on a real machine |
+| `coco3ram` | the same programs on the 80 column screen, in XRoar's Color Computer 3 with 128 KB and 512 KB; not tried on a real machine |
 | `dragon32`, `dragon64` | 6809 machines: the same programs print in XRoar's Dragon 32 and Dragon 64 what they print on the host; not tried on a real machine; no `diskio` |
 | `vic20`, `vic20plus3`, `vic20plus24`, `cx16os`, `mc64`, `sim6502` | builds; not run |
 | `atari`, `rp6502`, `w65c816sxb` | builds, for a program with `%launcher none` (these have no BASIC launcher); not run |

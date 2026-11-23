@@ -34,10 +34,15 @@ for lwasm.
   the Prog8 code after the assembly returns.
 - Labels are the program's as a whole, so each needs a prefix of its module
   and routine.  A label stands at the margin and ends with a colon.
-- For a machine whose program runs with the ROMs switched out (`coco2ram`),
-  a `jsr` of an address in the ROM (`jsr $bc14`, `jsr [$c004]`) is made a
-  call that switches them in around it.  A call that needs the ROMs without
-  being such an address gets the comment `;rom`: `jsr  >$00a5  ;rom`.
+- For a machine whose program runs with the ROMs switched out (`coco2ram`,
+  `coco3ram`), a `jsr` of an address in the ROM (`jsr $bc14`, `jsr [$c004]`)
+  is made a call that switches them in around it.  A call that needs the
+  ROMs without being such an address gets the comment `;rom`:
+  `jsr  >$00a5  ;rom`.
+- On `coco3ram` a module's variables without values are in the program's
+  upper memory, which is not there while a routine of BASIC's runs.  A module
+  that gives such a routine the address of a variable, or whose assembly
+  runs with BASIC's blocks in, is named in the target file's `lower_blocks`.
 - A branch is as it is written: the long form (`lbeq`) where the short one
   does not reach.
 - The code generator adds the `rts` at the end of the subroutine; the

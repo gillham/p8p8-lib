@@ -116,6 +116,19 @@ sys {
         return address
     }
 
+    sub upperstart() -> uword {
+        ; -- on a machine where the program has memory of its own in place of the ROMs
+        ;    (the coco2ram and coco3ram targets): the first address of it that the
+        ;    program's variables do not have; that memory is the program's to use from
+        ;    here on.  On the other machines it is progend().
+        uword @shared address
+        %asm {{
+            ldd  #p8_upper_end
+            std  _sys__upperstart__address
+        }}
+        return address
+    }
+
     sub progstart() -> uword {
         ; -- where the program begins
         uword @shared address
