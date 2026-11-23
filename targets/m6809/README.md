@@ -33,4 +33,6 @@ for lwasm.
   `A` and `B` for a byte, `D`, `X`, `Y` and `U` for a word, `Pc` for the
   carry.  An `asmsub` returns with `rts` itself (one declared `inline` has
   none and gets one).
-- There are no floats yet.
+- Floats are those of the BASIC in the machine's ROM (the target file's
+  `float_...` keys say where its routines are); `shared_coco_floats.p8` is
+  the Color Computers' `floats` module.
