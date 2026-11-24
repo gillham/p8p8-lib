@@ -43,6 +43,12 @@ for lwasm.
   upper memory, which is not there while a routine of BASIC's runs.  A module
   that gives such a routine the address of a variable, or whose assembly
   runs with BASIC's blocks in, is named in the target file's `lower_blocks`.
+- On `coco3ram` the code of a block may be above $8000 too, when the program
+  is long (see the target file, `high_code_end`): not that of a module
+  named in `lower_blocks`.  Assembly that changes the memory blocks itself,
+  or that BASIC's interrupt routine has to reach, belongs in such a module;
+  bytes in assembly that a routine of BASIC's is given the address of
+  belong below too (a variable with a value always is).
 - A branch is as it is written: the long form (`lbeq`) where the short one
   does not reach.
 - The code generator adds the `rts` at the end of the subroutine; the
