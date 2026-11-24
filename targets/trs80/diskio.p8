@@ -65,6 +65,13 @@ p8dio_dos_store:
         return dos(DOS_KILL, 0, fcb) == 0
     }
 
+    ; (no call of these DOSes renames a file on every one of them: see rename in shared_trsdos_diskio)
+    const bool HAS_RENAME = false
+
+    sub dos_rename(^^ubyte fcb, ^^ubyte newspec) -> bool {
+        return false
+    }
+
     sub command(^^ubyte text) {
         void dos(DOS_COMMAND, text, 0)
     }

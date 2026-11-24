@@ -324,9 +324,22 @@ diskio {
     }
 
     sub rename(str oldfileptr, str newfileptr) {
-        ; -- rename a file.  No call of these DOSes does that for every one of them: the file is copied
-        ;    to the new name and the old one deleted, so there must be room for the copy.  It fails when
-        ;    the new name exists.  (The files that were open for reading and writing are closed.)
+        ; -- rename a file.  It fails when the new name exists.  (The files that were open for reading
+        ;    and writing are closed.)  With the DOS's own call where the target's module has it
+        ;    (HAS_RENAME, dos_rename: the Model 4).  No call of the Model I and III DOSes does it for
+        ;    every one of them: there the file is copied to the new name and the old one deleted, so
+        ;    there must be room for the copy.
+        if HAS_RENAME {
+            f_close()
+            f_close_w()
+            if exists(newfileptr) or not prepare(other_fcb, oldfileptr) {
+                internal_ok = false
+                return
+            }
+            set_spec(newfileptr)
+            internal_ok = dos_rename(other_fcb, spec)
+            return
+        }
         if exists(newfileptr) or not f_open(oldfileptr) {
             internal_ok = false
             return

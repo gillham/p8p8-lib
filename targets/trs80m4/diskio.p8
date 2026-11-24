@@ -15,6 +15,10 @@ diskio {
     const ubyte SVC_CLOSE = 60
     const ubyte SVC_REMOV = 57          ; remove the file that is open
     const ubyte SVC_FSPEC = 78          ; a name into a file control block
+    const ubyte SVC_RENAM = 56          ; a new name for a file
+
+    ; (the DOS renames a file itself: see rename in shared_trsdos_diskio)
+    const bool HAS_RENAME = true
 
     ; (drive 0 by name: without it the DOS goes through every drive, and waits long for each that is empty)
     str directory_command = "DIR :0\r"
@@ -62,6 +66,11 @@ p8dio_svc_store:
 
     sub kill(^^ubyte fcb) -> bool {
         return svc(SVC_REMOV, 0, fcb) == 0
+    }
+
+    sub dos_rename(^^ubyte fcb, ^^ubyte newspec) -> bool {
+        ; -- the file whose name is in the control block (not open) gets the new name
+        return svc(SVC_RENAM, newspec, fcb) == 0
     }
 
     sub command(^^ubyte text) {
