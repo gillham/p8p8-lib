@@ -88,6 +88,7 @@ nothing more is claimed for those.
 | `coco2ram` | the same programs (also built with `-varshigh 0`), and the file test, in XRoar's Color Computer 2 with 64 KB; not tried on a real machine |
 | `coco3ram` | the same programs on the 80 column screen, in XRoar's Color Computer 3 with 128 KB and 512 KB; not tried on a real machine |
 | `dragon32`, `dragon64` | 6809 machines: the same programs print in XRoar's Dragon 32 and Dragon 64 what they print on the host; not tried on a real machine; no `diskio` |
+| `appleii` | the Apple II (the II Plus with `-cpu 6502`, the IIe, IIc and IIgs): the test programs without floats print in bobbin's enhanced IIe what the reference compiler's build for the same target prints, and the text screen's routines are checked there; not tried on a real machine or from a disk.  The program is a binary file for `$2000` with DOS 3.3's four bytes before it.  40 columns; no floats, no `diskio`, no graphics yet |
 | `vic20`, `vic20plus3`, `vic20plus24`, `cx16os`, `mc64`, `sim6502` | builds; not run |
 | `atari`, `rp6502`, `w65c816sxb` | builds, for a program with `%launcher none` (these have no BASIC launcher); not run |
 | `c64os` | **broken, being worked on**: does not build with either compiler, because its modules are older than the standard library they sit on |
@@ -99,7 +100,7 @@ nothing more is claimed for those.
 - `triples/`: the triple profiles of the LLVM branch of Prog8 for the 32-bit
   hosted platforms (WebAssembly with WASI, ARM Linux, RISC-V Linux), as they
   are there.  p8p8 reads them for `-target llvm32 -triple <name>`.
-- `targets/atari`, `c64os`, `cx16os`, `f256`, `gametank`, `mega65`, `plus4`,
+- `targets/appleii`, `atari`, `c64os`, `cx16os`, `f256`, `gametank`, `mega65`, `plus4`,
   `vic20...` and the others that Prog8 does not have: custom targets, which
   start from the standard library's modules for a similar machine.
 - `targets/c64`, `c128`, `cx16`, `pet32`: `target.properties` written for p8p8
