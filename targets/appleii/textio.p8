@@ -164,10 +164,26 @@ _rows_hi    .byte  $04, $04, $05, $05, $06, $06, $07, $07
 }
 
 asmsub setchr(ubyte col @X, ubyte row @Y, ubyte character @A) clobbers(A, Y) {
-    ; ---- put the character on the screen at the given position; the cursor stays where it was
+    ; ---- put the character on the screen at the given position; the cursor stays where it was.
+    ;      0-127 is the ASCII character in normal text; 128-255 is the character 128 less
+    ;      in inverse (as a screen code with its high bit set is on the Commodores), a
+    ;      lower case letter as its capital.  A row off the screen is ignored.
     %asm {{
+        cpy  #DEFAULT_HEIGHT
+        bcs  _done
+        cmp  #$80
+        bcs  _inverse
         ora  #$80
-        pha
+        bne  _put
+_inverse
+        and  #$7f
+        cmp  #$60
+        bcc  +
+        and  #$5f           ; lower case: the capital
++       cmp  #$40
+        bcc  _put           ; $20-$3f: digits and punctuation, inverse as they are
+        and  #$1f           ; $40-$5f: inverse capitals are $00-$1f
+_put    pha
         lda  rowaddress._rows_lo,y
         sta  P8ZP_SCRATCH_W1
         lda  rowaddress._rows_hi,y
@@ -176,14 +192,20 @@ asmsub setchr(ubyte col @X, ubyte row @Y, ubyte character @A) clobbers(A, Y) {
         tay
         pla
         sta  (P8ZP_SCRATCH_W1),y
-        rts
+_done   rts
     }}
 }
 
 asmsub getchr(ubyte col @A, ubyte row @Y) clobbers(Y) -> ubyte @ A {
-    ; ---- the character on the screen at the given position (ASCII, whatever way it is shown)
+    ; ---- the character on the screen at the given position: the ASCII character when it
+    ;      is normal text, and with 128 added when it is inverse or flashing, so that
+    ;      setchr() puts back what getchr() gave.  0 for a row off the screen.
     %asm {{
-        pha
+        cpy  #DEFAULT_HEIGHT
+        bcc  +
+        lda  #0
+        rts
++       pha
         lda  rowaddress._rows_lo,y
         sta  P8ZP_SCRATCH_W1
         lda  rowaddress._rows_hi,y
@@ -191,7 +213,15 @@ asmsub getchr(ubyte col @A, ubyte row @Y) clobbers(Y) -> ubyte @ A {
         pla
         tay
         lda  (P8ZP_SCRATCH_W1),y
+        bpl  _inverse
         and  #$7f
+        rts
+_inverse
+        and  #$3f
+        cmp  #$20
+        bcs  +
+        ora  #$40           ; $00-$1f are the capitals
++       ora  #$80
         rts
     }}
 }
@@ -217,7 +247,7 @@ sub setcc(ubyte col, ubyte row, ubyte character, ubyte charcolor) {
 }
 
 asmsub clear_screenchars(ubyte character @ A) clobbers(A, X, Y) {
-    ; ---- fill the screen with the character; the cursor stays where it was
+    ; ---- fill the screen with the character (ASCII, normal text); the cursor stays where it was
     %asm {{
         ora  #$80
         ldx  #DEFAULT_HEIGHT-1

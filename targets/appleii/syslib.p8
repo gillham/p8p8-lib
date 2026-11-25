@@ -50,7 +50,8 @@ _savey      .byte ?
         ;      (so an 80 column card or a printer gets it too).  A new line is 13 or 10.
         ;      Four of the Commodores' codes do here what they do there, for the text
         ;      routines the machines share: 147 clears the screen, 19 puts the cursor at
-        ;      the top left, 18 and 146 turn inverse text on and off.
+        ;      the top left, 18 and 146 turn inverse text on and off.  Inverse text has no
+        ;      lower case: such a letter is shown as its capital.
         ;      A, X and Y are kept.
         %asm {{
             pha
@@ -65,6 +66,11 @@ _savey      .byte ?
             cmp  #146
             beq  _normal
             ora  #$80
+            cmp  #$e0
+            bcc  _out
+            bit  appleii.INVFLG
+            bmi  _out
+            and  #$df           ; inverse (and flashing) text has no lower case: the capital
 _out        jsr  appleii.COUT
             pla
             rts
