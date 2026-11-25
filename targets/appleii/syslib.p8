@@ -121,6 +121,26 @@ _none       lda  #0
         }}
     }
 
+    asmsub STOP() -> bool @Pz, ubyte @A {
+        ; ---- is the break key pressed?  On the Apple II that is Control-C, as in BASIC.
+        ;      It is taken when it is the key that is waiting; any other key stays for
+        ;      GETIN.  A is the key that is waiting, with its high bit set.
+        %asm {{
+            lda  appleii.KBD
+            cmp  #$83
+            bne  +
+            sta  appleii.KBDSTRB
++           rts
+        }}
+    }
+
+    inline asmsub STOP2() -> bool @Pz {
+        ; -- just like STOP, but omits the key in A
+        %asm {{
+            jsr  cbm.STOP
+        }}
+    }
+
     asmsub PLOT(ubyte col @Y, ubyte row @A) {
         ; ---- put the cursor at the column and row (0,0 is the top left)
         %asm {{
