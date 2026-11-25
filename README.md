@@ -90,7 +90,8 @@ nothing more is claimed for those.
 | `dragon32`, `dragon64` | 6809 machines: the same programs print in XRoar's Dragon 32 and Dragon 64 what they print on the host; not tried on a real machine; no `diskio` |
 | `appleii` | the Apple II (the II Plus with `-cpu 6502`, the IIe, IIc and IIgs): the test programs without floats print in bobbin's enhanced IIe what the reference compiler's build for the same target prints, and the text screen's routines are checked there; not tried on a real machine or from a disk.  The program is a binary file for `$2000` with DOS 3.3's four bytes before it.  40 columns; no floats, no `diskio`, no graphics yet |
 | `vic20`, `vic20plus3`, `vic20plus24`, `cx16os`, `mc64`, `sim6502` | builds; not run |
-| `atari`, `rp6502`, `w65c816sxb` | builds, for a program with `%launcher none` (these have no BASIC launcher); not run |
+| `atari` | the Atari 8-bit computers with 48 KB or more (the 800XL): the test programs without floats leave in atari800's 800XL the text screen that the reference compiler's build for the same target leaves, and the text screen's routines, the clock and the keys' routines are checked there; not tried on a real machine or from a disk.  An `.xex` for `$2000` with its run address.  40 columns; no floats, no `diskio`, no graphics yet |
+| `rp6502`, `w65c816sxb` | builds, for a program with `%launcher none` (these have no BASIC launcher); not run |
 | `c64os` | **broken, being worked on**: does not build with either compiler, because its modules are older than the standard library they sit on |
 | upstream's `amiga500`, `amiga1200`, `qemu68k` | 68000 machines: p8p8 has no code generator for them yet, so they can only be checked, not built.  Custom 68000 targets are left out of this library until it has one |
 
