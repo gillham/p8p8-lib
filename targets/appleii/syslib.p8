@@ -112,6 +112,15 @@ _none       lda  #0
         }}
     }
 
+    inline asmsub GETIN2() -> ubyte @A {
+        ; -- just like GETIN, but omits the carry flag result value.
+        ;    just for convenience because GETIN is so often used to just read keyboard input,
+        ;    where you don't have to deal with a potential error status
+        %asm {{
+            jsr  cbm.GETIN
+        }}
+    }
+
     asmsub PLOT(ubyte col @Y, ubyte row @A) {
         ; ---- put the cursor at the column and row (0,0 is the top left)
         %asm {{
