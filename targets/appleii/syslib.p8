@@ -558,6 +558,34 @@ p8_sys_startup {
 -           sta  cx16.r0,y
             dey
             bpl  -
+            .if p8_prodos == 0
+            ; DOS 3.3 keeps the stack pointer of its caller while it works, and every
+            ; character that is printed goes through DOS and sets it anew.  A program
+            ; that BRUN started returns into DOS, which then takes the stack pointer
+            ; from there: it must be what it was when the program began.
+            ; (DOS is there when $3d0 jumps to its warm start, at $xdbf; the stack
+            ;  pointer is kept $c9a after that)
+            lda  #0
+            sta  cleanup_at_exit._dos_at+1      ; (no DOS)
+            lda  $03d0
+            cmp  #$4c
+            bne  +
+            lda  $03d1
+            cmp  #$bf
+            bne  +
+            lda  $03d2
+            cmp  #$c0
+            bcs  +
+            adc  #$0d                           ; ($xdbf + $0c9a = $xa59)
+            sta  cleanup_at_exit._dos_at+1
+            sta  P8ZP_SCRATCH_W1+1
+            lda  #$59
+            sta  P8ZP_SCRATCH_W1
+            ldy  #0
+            lda  (P8ZP_SCRATCH_W1),y
+            sta  cleanup_at_exit._dos_pointer
++
+            .endif
             clc
             clv
             rts
@@ -580,6 +608,16 @@ p8_sys_startup {
             .byte  $65
             .word  _quit
 _quit       .byte  4, 0, 0, 0, 0, 0, 0
+            .else
+            lda  _dos_at+1
+            beq  +
+            sta  P8ZP_SCRATCH_W1+1
+            lda  #$59
+            sta  P8ZP_SCRATCH_W1
+            ldy  #0
+            lda  _dos_pointer
+            sta  (P8ZP_SCRATCH_W1),y
++
             .endif
             lda  _exitcarry
             lsr  a
@@ -594,6 +632,11 @@ _exitcode   .byte ?
 _exitcodeX  .byte ?
 _exitcodeY  .byte ?
             .send BSS
+            ; (set before the program clears its variables)
+            .section BSS_NOCLEAR
+_dos_at     .word ?
+_dos_pointer .byte ?
+            .send BSS_NOCLEAR
 
             ; !notreached!
         }}

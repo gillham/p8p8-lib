@@ -113,10 +113,14 @@ diskio {
 
     asmsub fm_call(ubyte create @X) -> ubyte @A {
         ; -- the file manager with what is in its parameters (X = 0: OPEN may make the file);
-        ;    returns 0 or its error
+        ;    returns 0 or its error.  The carry is what says that it failed: the code alone does not
+        ;    (an OPEN that made the file leaves 6, file not found, there, and the file is open)
         %asm {{
             jsr  $03d6
-            jsr  $03dc
+            bcs  +
+            lda  #0
+            rts
++           jsr  $03dc
             sty  P8ZP_SCRATCH_W1
             sta  P8ZP_SCRATCH_W1+1
             ldy  #$0a
@@ -583,13 +587,6 @@ _done       lda  cx16.r1L
         fm[2] = 1
         fm[7] = file_type
         code = fm_call(0)
-        if code == ERR_NOT_FOUND {
-            ; (which is what the file manager says of a file that it has just made: now it is there)
-            prepare_name(FM_OPEN, write_memory)
-            fm[2] = 1
-            fm[7] = file_type
-            code = fm_call(1)
-        }
         if code != 0 {
             failed(code)
             return false
