@@ -6,8 +6,11 @@ add a `textio` and a `diskio` of their own, which are searched for first;
 theirs import `shared_dos_textio.p8` and `shared_dos_diskio.p8` from here.
 
 The modules are those of the llvm16 target: Prog8 with `%ir` blocks for what
-the machine has to do (system calls).  Nothing here is assembly but a few
-lines of `syslib`.
+the machine has to do (system calls).  Assembly are a few lines of `syslib`,
+DOS's calls in `shared_dos_textio.p8` and `shared_dos_diskio.p8`, and the
+float arithmetic at the end of `floats.p8`: every routine there is written
+with the 8087's instructions and without them (see the file's first
+lines, and `floats` in the target file).
 
 ## 8086 assembly in a module
 
