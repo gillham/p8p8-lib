@@ -100,7 +100,8 @@ nothing more is claimed for those.
 | `atari` | the Atari 8-bit computers with 48 KB or more (the 800XL): the test programs without floats leave in atari800's 800XL the text screen that the reference compiler's build for the same target leaves, and the text screen's routines, the clock and the keys' routines are checked there; not tried on a real machine.  An `.xex` for `$2000` with its run address.  `diskio` goes through the OS's CIO calls, so it works with any DOS (files read and written, the directory, delete, rename; no position in a file), checked on atari800's H: device and from an Atari DOS 2.5 disk.  40 columns; no floats, no graphics yet |
 | `rp6502`, `w65c816sxb` | builds, for a program with `%launcher none` (these have no BASIC launcher); not run |
 | `c64os` | **broken, being worked on**: does not build with either compiler, because its modules are older than the standard library they sit on |
-| upstream's `amiga500`, `amiga1200`, `qemu68k` | 68000 machines: p8p8 has no code generator for them yet, so they can only be checked, not built.  Custom 68000 targets are left out of this library until it has one |
+| upstream's `amiga500`, `amiga1200`, `qemu68k` | 68000 machines, built by p8p8's 68000 code generator: the test programs print in vamos (the Amigas) and in QEMU what the reference compiler's builds print there |
+| `atarist` | the Atari ST (a 68000, TOS 1.04 or later, or EmuTOS): a GEMDOS program (`.tos`).  The start gives the memory that the program does not need back (it keeps 16 KB of stack).  `textio` is on the VT-52 console: 40 or 80 columns by 25 lines, colours as the mode has them (16, 4 or 2: `txt.color` makes of a colour from 0 to 15 what the mode has), inverse text, the cursor's place, line wrap.  `sys.wait` counts the 200 Hz clock.  The test programs without floats print in Hatari, under TOS 1.04 and under EmuTOS, what they print on the host, and the text screen is checked in the three resolutions; keys were not tried; not tried on a real machine.  No floats (the generator's float code is for an FPU), no `diskio` yet, no GEM.  A word or a long at an odd address stops a 68000: a struct's fields are packed, so keeping them even is the program's business |
 
 ## What is here that is not upstream's
 
@@ -121,7 +122,9 @@ nothing more is claimed for those.
   | `common/buffers.p8`, `common/wavfile.p8`, `common/shared_string_functions.p8`, `common/shared_sys_functions.p8`, `common/shared_cbm_textio_functions.p8` | changes for targets with wider pointers or another byte order, and fixes |
   | `targets/c128/syslib.p8` | the BASIC ROM banked out for programs above $3fff |
   | `targets/pet32/textio.p8`, `targets/pet32/syslib.p8`, `targets/c64/syslib.p8`, `targets/cx16/syslib.p8` | fixes, and the list of targets in `sys.target` |
+  | `common/shared_m68k_prog8_math.asm` | the LLVM branch's: `sqrt()` of a uword compared with what was left in the upper half of d0, and so gave 255 for some values (seen on the Atari ST) |
   | `targets/qemu68k/syslib.p8` | the LLVM branch's: `sys.memcopy` copied a byte too few when source and target are aligned differently |
+  | `targets/atarist/*` | p8p8's own target; the thin modules (`math`, `strings`, `conv` and the like) are qemu68k's, `prog8_math` has the Amiga 500's 32 bit multiply and divide without AmigaOS |
   | `targets/virtual/*`, `targets/amiga500/textio.p8`, `targets/amiga1200/textio.p8`, `targets/qemu68k/textio.p8` | additions for the LLVM branch |
 
 - `common/shared_aligned_long_arena.p8`, `common/shared_hosted_compression.p8`:
