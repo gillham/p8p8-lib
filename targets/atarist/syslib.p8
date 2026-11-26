@@ -161,6 +161,69 @@ sys {
 
 
 
+    ; ----- the command line -----
+    ; GEMDOS leaves what was typed after the program's name in the base page: its length
+    ; at $80 and the text from $81, at most 125 characters.  The blanks become zeros
+    ; once, and an argument is where it stands there.  The program's own name is not
+    ; known to it: argument 0 is an empty string.
+
+    bool args_split = false
+    ubyte args_count = 0
+    ubyte args_length = 0
+    str args_none = ""
+
+    sub split_arguments() {
+        if args_split
+            return
+        args_split = true
+        pointer text = tos.basepage + $81
+        args_length = @(tos.basepage + $80)
+        if args_length > 125
+            args_length = 125
+        @(text + args_length) = 0
+        bool inside = false
+        ubyte k
+        for k in 0 to args_length {
+            if @(text + k) <= 32 {
+                @(text + k) = 0
+                inside = false
+            }
+            else if not inside {
+                inside = true
+                args_count++
+            }
+        }
+    }
+
+    sub argc() -> uword {
+        ; -- returns the number of command line arguments, including the program name (so normally at least 1)
+        split_arguments()
+        return args_count + 1
+    }
+
+    sub argv(uword index) -> str {
+        ; -- returns the command line argument at the 0-based index (0 is the program name, which is empty
+        ;    here), or an empty string when there is none
+        split_arguments()
+        if index == 0 or index > args_count
+            return args_none
+        pointer text = tos.basepage + $81
+        ubyte number = 0
+        bool inside = false
+        ubyte k
+        for k in 0 to args_length {
+            if @(text + k) == 0
+                inside = false
+            else if not inside {
+                inside = true
+                number++
+                if number == index
+                    return text + k
+            }
+        }
+        return args_none
+    }
+
     sub reset_system() {
         ; -- end the program (a program of GEMDOS does not restart the machine)
         exit(0)
