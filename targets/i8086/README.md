@@ -30,5 +30,9 @@ for nasm.
   label is made the opposite jump around a `jmp`.
 - The code generator adds the `ret` at the end of the subroutine; the
   assembly falls through to it.
-- The 8086's registers in the declaration of an `asmsub` or `extsub` are
-  not there yet.
+- An `asmsub`, and an `extsub` at an address, name the 8086's registers:
+  `AL`, `AH`, `BL`, `BH`, `CL`, `CH`, `DL`, `DH` for a byte, `AX`, `BX`,
+  `CX`, `DX`, `SI`, `DI`, `BP` for a word, `Pc` for the carry.  An `asmsub`
+  returns with `ret` itself (one declared `inline` has none and gets one).
+  A routine that only other assembly calls is not seen as used: call it
+  from Prog8 code, or it may be left out of the program.
