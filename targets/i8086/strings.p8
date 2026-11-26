@@ -22,14 +22,19 @@ strings {
     alias upper_iso = strings.upper
     alias compare_nocase_iso = strings.compare_nocase
 
-    sub length(str st) -> ubyte {
+    asmsub length(str st @DI) -> ubyte @AL {
         ; Returns the number of bytes in the string.
         ; This value is determined during runtime and counts upto the first terminating 0 byte in the string,
         ; regardless of the size of the string during compilation time. Don’t confuse this with len and sizeof!
-        ubyte count = 0
-        while st[count]!=0
-            count++
-        return count
+        %asm {{
+            xor  al, al
+            mov  cx, 0xffff
+            repne scasb
+            not  cx
+            dec  cx
+            mov  al, cl
+            ret
+        }}
     }
 
     sub left(str source, ubyte slen, str target)  {
@@ -114,19 +119,25 @@ strings {
         return ncopy(source, target, 255)
     }
 
-    sub ncopy(str source, str target, ubyte maxlength) -> ubyte {
+    asmsub ncopy(str source @SI, str target @DI, ubyte maxlength @CL) -> ubyte @AL {
         ; Copy a string to another, overwriting that one, but limited to the given length.
         ; Returns the length of the string that was copied.
-        ubyte ix = 0
-        while ix<maxlength {
-            ubyte char = source[ix]
-            if char==0
-                break
-            target[ix] = char
-            ix++
-        }
-        target[ix] = 0
-        return ix
+        %asm {{
+            xor  ch, ch
+            mov  dx, cx
+            jcxz  p8str_ncopy_end
+        p8str_ncopy_next:
+            lodsb
+            test  al, al
+            jz  p8str_ncopy_end
+            stosb
+            loop  p8str_ncopy_next
+        p8str_ncopy_end:
+            mov  byte [di], 0
+            mov  ax, dx
+            sub  ax, cx
+            ret
+        }}
     }
 
     sub append(str target, str suffix) -> ubyte {
@@ -145,24 +156,28 @@ strings {
         return ncopy(suffix, target+target_len, maxlength-target_len) + target_len
     }
 
-    sub compare(str st1, str st2) -> byte {
+    asmsub compare(str st1 @SI, str st2 @DI) -> byte @AL {
         ; Compares two strings for sorting (case sensitive), by their unsigned byte values.
         ; Returns -1 (255), 0 or 1, meaning: string1 sorts before, equal or after string2.
         ; Note that you can also directly compare strings and string values with each other using
         ; comparison operators ==, < etcetera (this will use strcmp automatically).
-        repeat {
-            ubyte char1 = st1^^
-            ubyte char2 = st2^^
-            if char1!=char2 {
-                if char1<char2
-                    return -1
-                return 1
-            }
-            if char1==0
-                return 0
-            st1++
-            st2++
-        }
+        %asm {{
+        p8str_compare_next:
+            lodsb
+            mov  ah, [di]
+            inc  di
+            cmp  al, ah
+            jne  p8str_compare_differ
+            test  al, al
+            jnz  p8str_compare_next
+            ret
+        p8str_compare_differ:
+            mov  al, 1
+            ja  p8str_compare_end
+            mov  al, 255
+        p8str_compare_end:
+            ret
+        }}
     }
 
     sub compare_nocase(str st1, str st2) -> byte {
@@ -405,6 +420,64 @@ strings {
             }
         }
         return 255
+    }
+
+    sub pattern_match(str string, str pattern) -> bool {
+        ; -- does the string match the pattern, in which ? is any one character and * any number of them
+        ubyte s = 0
+        ubyte p = 0
+        ubyte star_p = 255          ; the pattern's last star, and how far into the string it was tried
+        ubyte star_s = 0
+        while string[s] != 0 {
+            if pattern[p] == '*' {
+                star_p = p
+                star_s = s
+                p++
+            }
+            else if pattern[p] == '?' or pattern[p] == string[s] {
+                s++
+                p++
+            }
+            else if star_p != 255 {
+                p = star_p + 1
+                star_s++
+                s = star_s
+            }
+            else
+                return false
+        }
+        while pattern[p] == '*'
+            p++
+        return pattern[p] == 0
+    }
+
+    sub pattern_match_nocase(str string, str lowercase_pattern, bool iso) -> bool {
+        ; -- pattern_match() with the string's capitals taken as small letters (the pattern's are small ones)
+        ubyte s = 0
+        ubyte p = 0
+        ubyte star_p = 255
+        ubyte star_s = 0
+        while string[s] != 0 {
+            if lowercase_pattern[p] == '*' {
+                star_p = p
+                star_s = s
+                p++
+            }
+            else if lowercase_pattern[p] == '?' or lowercase_pattern[p] == lowerchar(string[s]) {
+                s++
+                p++
+            }
+            else if star_p != 255 {
+                p = star_p + 1
+                star_s++
+                s = star_s
+            }
+            else
+                return false
+        }
+        while lowercase_pattern[p] == '*'
+            p++
+        return lowercase_pattern[p] == 0
     }
 
     sub next_token(str source, str delimiters) -> str {

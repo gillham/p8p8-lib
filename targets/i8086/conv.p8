@@ -1,4 +1,4 @@
-; Number conversion routines for the llvm16 target, in pure Prog8.
+; Number conversion routines for the 8086 machines of p8p8: Prog8, with the routines that most programs carry in 8086 assembly.
 
 %import strings
 
@@ -19,14 +19,7 @@ conv {
 
 sub  str_ub0(ubyte value) -> str {
     ; ---- convert the ubyte in decimal string form, with left padding 0s (3 positions total)
-    ubyte hundreds = value / 100
-    value -= hundreds*100
-    ubyte tens = value / 10
-    value -= tens*10
-    string_out[0] = hundreds+'0'
-    string_out[1] = tens+'0'
-    string_out[2] = value+'0'
-    string_out[3] = 0
+    decimal(&value, string_out, 1, 3)
     return string_out
 }
 
@@ -49,32 +42,12 @@ sub  str_b(byte value) -> str {
 }
 
 private sub internal_str_ub(ubyte value, str out_ptr) {
-    ubyte hundreds = value / 100
-    value -= hundreds*100
-    ubyte tens = value / 10
-    value -= tens*10
-    if hundreds!=0
-        goto output_hundreds
-    if tens!=0
-        goto output_tens
-    goto output_ones
-output_hundreds:
-    @(out_ptr) = hundreds+'0'
-    out_ptr++
-output_tens:
-    @(out_ptr) = tens+'0'
-    out_ptr++
-output_ones:
-    @(out_ptr) = value+'0'
-    out_ptr++
-    @(out_ptr) = 0
+    decimal(&value, out_ptr, 1, 1)
 }
 
 sub  str_ubhex  (ubyte value) -> str {
     ; ---- convert the ubyte in hex string form
-    string_out[0] = hex_digits[value>>4]
-    string_out[1] = hex_digits[value&15]
-    string_out[2] = 0
+    hexadecimal(&value, 1)
     return string_out
 }
 
@@ -110,34 +83,48 @@ sub  str_uwbin  (uword value) -> str {
 
 sub  str_uwhex  (uword value) -> str {
     ; ---- convert the uword in hexadecimal string form (4 digits)
-    ubyte bits = msb(value)
-    string_out[0] = hex_digits[bits>>4]
-    string_out[1] = hex_digits[bits&15]
-    bits = lsb(value)
-    string_out[2] = hex_digits[bits>>4]
-    string_out[3] = hex_digits[bits&15]
-    string_out[4] = 0
+    hexadecimal(&value, 2)
     return string_out
 }
 
 sub  str_ulhex  (long value) -> str {
     ; ---- convert the long in hexadecimal string form (8 digits)
-    uword upperw = msw(value)
-    uword lowerw = lsw(value)
-    ubyte bits = msb(upperw)
-    string_out[0] = hex_digits[bits>>4]
-    string_out[1] = hex_digits[bits&15]
-    bits = lsb(upperw)
-    string_out[2] = hex_digits[bits>>4]
-    string_out[3] = hex_digits[bits&15]
-    bits = msb(lowerw)
-    string_out[4] = hex_digits[bits>>4]
-    string_out[5] = hex_digits[bits&15]
-    bits = lsb(lowerw)
-    string_out[6] = hex_digits[bits>>4]
-    string_out[7] = hex_digits[bits&15]
-    string_out[8] = 0
+    hexadecimal(&value, 4)
     return string_out
+}
+
+asmsub hexadecimal(uword number @SI, ubyte bytes @CL) {
+    ; ---- The hexadecimal digits of a number of 1, 2 or 4 bytes into string_out, two for
+    ; each byte from the top one down, in 8086 assembly.  A digit is made with the
+    ; decimal-adjust instruction and is a small letter from a on, as in hex_digits.
+    %asm {{
+        xor  ch, ch
+        add  si, cx
+        mov  di, _conv__string_out
+    p8conv_hex_byte:
+        dec  si
+        mov  al, [si]
+        mov  ah, al
+        shr  al, 1
+        shr  al, 1
+        shr  al, 1
+        shr  al, 1
+        call  p8conv_hex_digit
+        mov  al, ah
+        call  p8conv_hex_digit
+        loop  p8conv_hex_byte
+        mov  byte [di], 0
+        ret
+    p8conv_hex_digit:
+        and  al, 15
+        add  al, 0x90
+        daa
+        adc  al, 0x40
+        daa
+        or  al, 0x20
+        stosb
+        ret
+    }}
 }
 
 sub  str_uqhex  (uquad value) -> str {
@@ -166,22 +153,7 @@ sub  str_uqbin  (uquad value) -> str {
 
 sub  str_uw0  (uword value) -> str {
     ; ---- convert the uword in decimal string form, with left padding 0s (5 positions total)
-    uword value2 = value/10
-    ubyte digits = value-value2*10 as ubyte
-    uword value3 = value2/10
-    ubyte tens = value2-value3*10 as ubyte
-    uword value4 = value3/10
-    ubyte hundreds = value3-value4*10 as ubyte
-    uword value5 = value4/10
-    ubyte thousands = value4-value5*10 as ubyte
-    uword value6 = value5/10
-    ubyte tenthousands = value5-value6*10 as ubyte
-    string_out[0] = tenthousands+'0'
-    string_out[1] = thousands+'0'
-    string_out[2] = hundreds+'0'
-    string_out[3] = tens+'0'
-    string_out[4] = digits+'0'
-    string_out[5] = 0
+    decimal(&value, string_out, 2, 5)
     return string_out
 }
 
@@ -204,41 +176,7 @@ sub  str_w  (word value) -> str {
 }
 
 private sub internal_str_uw(uword value, str out_ptr) {
-    uword value2 = value/10
-    ubyte digits = value-value2*10 as ubyte
-    uword value3 = value2/10
-    ubyte tens = value2-value3*10 as ubyte
-    uword value4 = value3/10
-    ubyte hundreds = value3-value4*10 as ubyte
-    uword value5 = value4/10
-    ubyte thousands = value4-value5*10 as ubyte
-    uword value6 = value5/10
-    ubyte tenthousands = value5-value6*10 as ubyte
-    if tenthousands!=0
-        goto output_tenthousands
-    if thousands!=0
-        goto output_thousands
-    if hundreds!=0
-        goto output_hundreds
-    if tens!=0
-        goto output_tens
-    goto output_ones
-output_tenthousands:
-    @(out_ptr) = tenthousands+'0'
-    out_ptr++
-output_thousands:
-    @(out_ptr) = thousands+'0'
-    out_ptr++
-output_hundreds:
-    @(out_ptr) = hundreds+'0'
-    out_ptr++
-output_tens:
-    @(out_ptr) = tens+'0'
-    out_ptr++
-output_ones:
-    @(out_ptr) = digits+'0'
-    out_ptr++
-    @(out_ptr) = 0
+    decimal(&value, out_ptr, 2, 1)
 }
 
 sub  str_l  (long value) -> str {
@@ -260,27 +198,61 @@ sub  str_u32  (long value) -> str {
 }
 
 private sub internal_str_u32(long value, str out_ptr) {
-    ubyte[10] digits
-    ubyte count = 0
-    if value<0 {
-        ; 2^31 or more as an unsigned number, which the signed division can't handle: divide by 10 as (value>>>1) / 5
-        long unsignedquotient = ((value >> 1) & $7fffffff) / 5
-        digits[0] = value - unsignedquotient*10 as ubyte
-        count = 1
-        value = unsignedquotient
-    }
-    do {
-        long quotient = value / 10
-        digits[count] = value - quotient*10 as ubyte
-        count++
-        value = quotient
-    } until value==0
-    while count!=0 {
-        count--
-        @(out_ptr) = digits[count]+'0'
-        out_ptr++
-    }
-    @(out_ptr) = 0
+    decimal(&value, out_ptr, 4, 1)
+}
+
+asmsub decimal(uword number @SI, uword out_ptr @DI, ubyte bytes @CL, ubyte digits @CH) {
+    ; ---- The decimal digits of an unsigned number of 1, 2 or 4 bytes, in 8086 assembly: one
+    ; routine for all the decimal conversions above.  number is where the number is,
+    ; bytes its size, out_ptr where the text goes (it ends with 0), digits the least
+    ; number of digits.
+    ; The number (in DI and BX) is divided by 10 again and again; each remainder is a
+    ; digit, which waits on the stack until the last one, the first of the text, is known.
+    %asm {{
+        push  bp
+        mov  bp, 10
+        xor  dx, dx
+        mov  bx, [si]
+        cmp  cl, 1
+        jne  p8conv_decimal_wide
+        xor  bh, bh
+    p8conv_decimal_wide:
+        cmp  cl, 4
+        jne  p8conv_decimal_start
+        mov  dx, [si+2]
+    p8conv_decimal_start:
+        mov  si, di
+        mov  di, dx
+        xor  ax, ax
+        push  ax
+    p8conv_decimal_digit:
+        mov  ax, di
+        xor  dx, dx
+        div  bp
+        mov  di, ax
+        mov  ax, bx
+        div  bp
+        mov  bx, ax
+        add  dl, 48
+        push  dx
+        test  ch, ch
+        jz  p8conv_decimal_rest
+        dec  ch
+    p8conv_decimal_rest:
+        mov  ax, bx
+        or  ax, di
+        jnz  p8conv_decimal_digit
+        test  ch, ch
+        jnz  p8conv_decimal_digit
+    p8conv_decimal_out:
+        pop  ax
+        mov  [si], al
+        inc  si
+        test  al, al
+        jnz  p8conv_decimal_out
+        pop  bp
+        ret
+    }}
 }
 
 sub  str_i64  (quad value) -> str {
@@ -341,55 +313,72 @@ sub  str2byte(str string) -> byte {
     return str2word(string) as byte
 }
 
-sub  str2uword(str string) -> uword {
-    uword result
-    ubyte ii
-    while string[ii] >= '0' and string[ii] <= '9' {
-        result = result * 10 + (string[ii] - '0') as uword
-        ii++
-    }
-    return result
+asmsub  str2uword(str string @SI) -> uword @AX {
+    ; ---- the unsigned number that the decimal digits at the start of the string say
+    %asm {{
+        xor  bx, bx
+    p8conv_str2uword_digit:
+        lodsb
+        sub  al, 48
+        cmp  al, 10
+        jae  p8conv_str2uword_end
+        xor  ah, ah
+        mov  cx, ax
+        mov  ax, bx
+        mov  dx, 10
+        mul  dx
+        add  ax, cx
+        mov  bx, ax
+        jmp  p8conv_str2uword_digit
+    p8conv_str2uword_end:
+        mov  ax, bx
+        ret
+    }}
 }
 
 sub  str2word(str string) -> word {
-    bool negative
-    ubyte ii
+    ; ---- the same with a sign before the digits
+    uword magnitude
     if string[0] == '-' {
-        negative = true
-        ii = 1
-    } else {
-        if string[0] == '+'
-            ii = 1
+        string++
+        magnitude = str2uword(string)
+        return 0 - magnitude as word
     }
-    uword result
-    while string[ii] >= '0' and string[ii] <= '9' {
-        result = result * 10 + (string[ii] - '0') as uword
-        ii++
-    }
-    if negative
-        return 0 - result as word
-    return result as word
+    if string[0] == '+'
+        string++
+    magnitude = str2uword(string)
+    return magnitude as word
 }
 
-sub  hex2uword(str string) -> uword {
+asmsub  hex2uword(str string @SI) -> uword @AX {
     ; -- hexadecimal string (with or without '$') to uword.
     ;    stops parsing at the first character that's not a hex digit (except leading $)
-    uword result
-    ubyte char
-    if @(string)=='$'
-        string++
-    repeat {
-        char = strings.lowerchar(@(string))
-        if strings.isxdigit(char) {
-            result <<= 4
-            if char>='0' and char<='9'
-                result |= char-'0'
-            else
-                result |= char-'a'+10
-        } else
-            return result
-        string++
-    }
+    %asm {{
+        xor  bx, bx
+        cmp  byte [si], 36
+        jne  p8conv_hex2uword_digit
+        inc  si
+    p8conv_hex2uword_digit:
+        lodsb
+        sub  al, 48
+        jb  p8conv_hex2uword_end
+        cmp  al, 10
+        jb  p8conv_hex2uword_add
+        or  al, 0x20
+        sub  al, 49
+        jb  p8conv_hex2uword_end
+        cmp  al, 6
+        jae  p8conv_hex2uword_end
+        add  al, 10
+    p8conv_hex2uword_add:
+        mov  cl, 4
+        shl  bx, cl
+        or  bl, al
+        jmp  p8conv_hex2uword_digit
+    p8conv_hex2uword_end:
+        mov  ax, bx
+        ret
+    }}
 }
 
 sub  hex2long(str string) -> long {

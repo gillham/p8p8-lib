@@ -6,7 +6,10 @@ add a `textio` and a `diskio` of their own, which are searched for first;
 theirs import `shared_dos_textio.p8` and `shared_dos_diskio.p8` from here.
 
 The modules are those of the llvm16 target: Prog8 with `%ir` blocks for what
-the machine has to do (system calls).  Assembly are a few lines of `syslib`,
+the machine has to do (system calls).  Routines that many programs carry
+are 8086 assembly, for size: the decimal and hexadecimal digits of numbers
+and the reading of numbers in `conv`, and `length`, `ncopy` and `compare`
+in `strings`.  Assembly too are a few lines of `syslib`,
 DOS's calls in `shared_dos_textio.p8` and `shared_dos_diskio.p8`, and the
 float arithmetic at the end of `floats.p8`: every routine there is written
 with the 8087's instructions and without them (see the file's first
@@ -41,5 +44,5 @@ for nasm.
   `AL`, `AH`, `BL`, `BH`, `CL`, `CH`, `DL`, `DH` for a byte, `AX`, `BX`,
   `CX`, `DX`, `SI`, `DI`, `BP` for a word, `Pc` for the carry.  An `asmsub`
   returns with `ret` itself (one declared `inline` has none and gets one).
-  A routine that only other assembly calls is not seen as used: call it
-  from Prog8 code, or it may be left out of the program.
+  One that nothing uses is left out of the program.  What assembly names
+  (`_block__name`) counts as used.
