@@ -572,7 +572,15 @@ p8_sys_startup {
 
     asmsub  cleanup_at_exit() {
         ; executed when the main subroutine does rts
+        ; (the prodos target's program is a system program, which nothing called: it
+        ;  ends with ProDOS's QUIT.  The target files have the assembler define p8_prodos.)
         %asm {{
+            .if p8_prodos != 0
+            jsr  $bf00
+            .byte  $65
+            .word  _quit
+_quit       .byte  4, 0, 0, 0, 0, 0, 0
+            .endif
             lda  _exitcarry
             lsr  a
             lda  _exitcode
