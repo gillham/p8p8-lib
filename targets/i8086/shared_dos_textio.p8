@@ -53,6 +53,7 @@ txt {
     const ubyte WHITE = 15
 
     bool reversed = false
+    ubyte plain = 7             ; the colours as color() and color2() set them (rvs_on() changes the two over)
 
 asmsub last_cell() -> ubyte @DL, ubyte @DH {
     ; ---- the last column and the last row of the screen (79 and 24 mostly).  The rows are the EGA's and VGA's to tell;
@@ -271,29 +272,51 @@ asmsub set_attribute(ubyte colors @AL) {
 
 sub color(ubyte txtcol) {
     ; ---- the colour of the text that is printed from now on, 0-15
-    set_attribute((attribute() & $f0) | (txtcol & 15))
+    plain = (plain & $f0) | (txtcol & 15)
+    apply()
 }
 
 sub color2(ubyte txtcol, ubyte bgcol) {
     ; ---- the colours of the text and of its background (0-7)
-    set_attribute((bgcol & 7) << 4 | (txtcol & 15))
+    plain = (bgcol & 7) << 4 | (txtcol & 15)
+    apply()
 }
 
 sub rvs_on() {
-    ; ---- text and background change places
+    ; ---- text and background change places.  A text colour from 8 on (yellow, white ...) is a background that the
+    ;      display adapter only shows when its fourth bit does not mean "blinking": that is switched off here, which
+    ;      the EGA and VGA can do; on an older adapter such a background is the darker colour, blinking.
     if not reversed {
         reversed = true
-        ubyte colors = attribute()
-        set_attribute((colors & 7) << 4 | (colors >> 4) & 7)
+        if plain & 8 != 0
+            bright_backgrounds()
+        apply()
     }
 }
 
 sub rvs_off() {
     if reversed {
         reversed = false
-        ubyte colors = attribute()
-        set_attribute((colors & 7) << 4 | (colors >> 4) & 7)
+        apply()
     }
+}
+
+sub apply() {
+    ; -- the colours as color() and color2() set them, or those two changed over
+    if reversed
+        set_attribute(plain << 4 | plain >> 4)
+    else
+        set_attribute(plain)
+}
+
+asmsub bright_backgrounds() {
+    ; ---- the top bit of a cell's colours is a bright background, not blinking (EGA and VGA)
+    %asm {{
+        mov  ax, 0x1003
+        xor  bx, bx
+        int  0x10
+        ret
+    }}
 }
 
 sub bell() {
