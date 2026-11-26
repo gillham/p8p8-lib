@@ -1,8 +1,9 @@
 # The library of the 8086 machines
 
-Not a target: there is no `target.properties` here.  The 8086 targets (`dos`)
-name this directory as their library (`library = ../i8086`) and add a
-`textio` of their own, which is searched for first.
+Not a target: there is no `target.properties` here.  The 8086 targets (`dos`,
+`dosexe`) name this directory as their library (`library = ../i8086`) and
+add a `textio` and a `diskio` of their own, which are searched for first;
+theirs import `shared_dos_textio.p8` and `shared_dos_diskio.p8` from here.
 
 The modules are those of the llvm16 target: Prog8 with `%ir` blocks for what
 the machine has to do (system calls).  Nothing here is assembly but a few
@@ -16,8 +17,11 @@ for nasm.
 - A variable is named as p8p8's 8086 code generator writes it: an underscore,
   then the scoped name with two underscores for each dot.  The parameter `st`
   of `strings.length` is `_strings__length__st`.
-- The program is one segment: no segment register may be left changed, and
-  the direction flag is clear (`cld`) wherever the generator's own code runs.
+- No segment register may be left changed, and the direction flag is clear
+  (`cld`) wherever the generator's own code runs.  DS, ES and SS are the
+  same segment.  In a `.COM` program (`dos`) CS is that segment too; in an
+  `.EXE` program (`dosexe`) the code has its own, so bytes written into
+  the assembly with `db` are not where DS points: keep data in variables.
 - Every other register is free: the generator's code keeps nothing in a
   register from one statement to the next.
 - A subroutine's parameters are variables: the caller has stored them when

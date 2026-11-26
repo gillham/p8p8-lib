@@ -36,6 +36,7 @@ targets/                   one directory for each machine or target
     sim6809/target.properties, textio.p8   a 6809 machine: a bare 6809 in usim09batch
     m6809/                                 the library of the 6809 machines (not a target)
     dos/target.properties, textio.p8       an 8086 machine ("cpu = 8086"): MS-DOS, a .COM program
+    dosexe/                                MS-DOS, an .EXE program: the dos target with code and data in segments of their own
     i8086/                                 the library of the 8086 machines (not a target)
 triples/                   platforms of the llvm32 target: one properties file each
 VERSION                    which upstream commit prog8lib/ is
@@ -90,6 +91,7 @@ nothing more is claimed for those.
 | `coco2ram` | the same programs (also built with `-varshigh 0`), and the file test, in XRoar's Color Computer 2 with 64 KB; not tried on a real machine |
 | `coco3ram` | the same programs on the 80 column screen, in XRoar's Color Computer 3 with 128 KB and 512 KB; not tried on a real machine |
 | `dragon32`, `dragon64` | 6809 machines: the same programs print in XRoar's Dragon 32 and Dragon 64 what they print on the host; not tried on a real machine; no `diskio` |
+| `dosexe` | the `dos` target as an `.EXE` file: the same tests |
 | `dos` | an 8086 machine, for p8p8's 8086 code generator, which is a beginning: the test programs without floats print in DOSBox-X what they print on the host, and the screen's routines, the command line and `diskio` are checked there; the keyboard's routines were not run; not tried on a real machine |
 | `appleii` | the Apple II (the II Plus with `-cpu 6502`, the IIe, IIc and IIgs): the test programs without floats print in bobbin's enhanced IIe what the reference compiler's build for the same target prints, and the text screen's routines are checked there; not tried on a real machine or from a disk.  The program is a binary file for `$2000` with DOS 3.3's four bytes before it.  40 columns; no floats, no `diskio`, no graphics yet |
 | `vic20`, `vic20plus3`, `vic20plus24`, `cx16os`, `mc64`, `sim6502` | builds; not run |
