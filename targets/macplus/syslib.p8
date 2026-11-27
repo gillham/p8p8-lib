@@ -770,6 +770,50 @@ sys {
 
 
 
+    ; ----- a number that is not the same every time -----
+
+    uword entropy_state
+
+    asmsub entropy() -> uword @D0 {
+        ; -- 16 bits to seed a random generator with (math.rndseed): mixed from the
+        ;    clock's seconds, the ticks since the machine started, where the mouse is
+        ;    and two of the VIA's running timers.  Every call gives another number.
+        ;    (Not in upstream's library: p8p8's own.)
+        %asm {{
+            movem.l d1/a0,-(sp)
+            move.w  sys.entropy_state,d0
+            add.w   #$9e37,d0
+            move.w  $16c.w,d1               ; Ticks, its lower half
+            eor.w   d1,d0
+            move.w  $20e.w,d1               ; Time: the seconds since 1904, lower half
+            rol.w   #5,d1
+            eor.w   d1,d0
+            move.w  $830.w,d1               ; Mouse: down,
+            eor.w   d1,d0
+            move.w  $832.w,d1               ;   and across
+            rol.w   #8,d1
+            eor.w   d1,d0
+            move.l  $1d4.w,a0               ; the VIA: the upper bytes of its timers 1
+            move.b  $a00(a0),d1             ;   and 2 (reading the lower ones would take
+            lsl.w   #8,d1                   ;   an interrupt away from the system)
+            move.b  $1200(a0),d1
+            eor.w   d1,d0
+            move.w  d0,d1                   ; stirred
+            lsl.w   #7,d1
+            eor.w   d1,d0
+            move.w  d0,d1
+            lsr.w   #8,d1
+            lsr.w   #1,d1
+            eor.w   d1,d0
+            move.w  d0,d1
+            lsl.w   #8,d1
+            eor.w   d1,d0
+            move.w  d0,sys.entropy_state
+            movem.l (sp)+,d1/a0
+            rts
+        }}
+    }
+
     ; ----- the command line -----
     ; An application is not started with words after its name: there are none.
 
