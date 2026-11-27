@@ -107,6 +107,13 @@ nothing more is claimed for those.
 ## What is here that is not upstream's
 
 - `targets/llvm64`, `llvm32`, `llvm16`: the library of the LLVM targets.
+- `sys.entropy()` in every `targets/*/syslib.p8`: a `uword` to seed the
+  random generator with, another one at every call, mixed from what the
+  machine has that changes (raster line, timers, clocks; the comment at
+  each says what).  On `f256`, `rp6502`, `w65c816sxb`, `qemu68k` and
+  `virtual` there is nothing to take, and the numbers are the same at
+  every start; on the Apple II they are until a key was read.  The two
+  Amigas use upstream's `syslib.p8` and do not have it.
 - `triples/`: the triple profiles of the LLVM branch of Prog8 for the 32-bit
   hosted platforms (WebAssembly with WASI, ARM Linux, RISC-V Linux), as they
   are there.  p8p8 reads them for `-target llvm32 -triple <name>`.

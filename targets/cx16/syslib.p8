@@ -1863,6 +1863,21 @@ asmsub  set_rasterline(uword line @AY) {
         }
     }
 
+    uword entropy_state
+
+    sub entropy() -> uword {
+        ; -- 16 bits to seed a random generator with (math.rndseed).  Every call gives
+        ;    another number.  From: the KERNAL's entropy_get.
+        ;    (Not in upstream's library: p8p8's own.)
+        ubyte e1, e2, e3 = cx16.entropy_get()
+        entropy_state ^= mkword(e1 ^ e3, e2)
+        entropy_state += $9e37
+        entropy_state ^= entropy_state << 7
+        entropy_state ^= entropy_state >> 9
+        entropy_state ^= entropy_state << 8
+        return entropy_state
+    }
+
     asmsub wait(uword jiffies @AY) clobbers(X) {
         ; --- wait approximately the given number of jiffies (1/60th seconds) (N or N+1)
         ;     note: the system irq handler has to be active for this to work as it depends on the system jiffy clock

@@ -1167,6 +1167,20 @@ asmsub  set_rasterline(uword line @AY) {
         }}
     }
 
+    uword entropy_state
+
+    sub entropy() -> uword {
+        ; -- 16 bits to seed a random generator with (math.rndseed).  Every call gives
+        ;    another number.  From: the raster line, a timer of the first CIA and the MEGA65's random number register.
+        ;    (Not in upstream's library: p8p8's own.)
+        entropy_state ^= mkword(@($d012) ^ @($d7ef), @($dc04))
+        entropy_state += $9e37
+        entropy_state ^= entropy_state << 7
+        entropy_state ^= entropy_state >> 9
+        entropy_state ^= entropy_state << 8
+        return entropy_state
+    }
+
     asmsub wait(uword jiffies @AY) {
         ; --- wait approximately the given number of jiffies (1/60th seconds) (N or N+1)
         ;     note: CIA2 TIMER A has to be active for this to work.
