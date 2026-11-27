@@ -28,6 +28,8 @@ macos {
     long window                     ; the window (a WindowPtr)
     long region                     ; for ScrollRect to say what it could not move
     long found_window               ; the window that a click was in
+    long apple_menu                 ; the menu with the desk accessories
+    ubyte[256] accessory            ; the name of one of them
     uword[4] rect                   ; a rectangle for the calls: top, left, bottom, right
     uword[4] limits                 ; where the window may be dragged to
     ubyte column                    ; where the next character goes
@@ -181,6 +183,10 @@ macos {
         clear_pb()
         void file_call(F_FLUSHVOL)          ; (the volume that the application is on)
         unattended = false
+        ; for what runs the machine to see that the program is done: the system's
+        ; eight bytes for anybody's use, Scratch8
+        pokel($09fa, $50385038)             ; "P8P8"
+        pokel($09fe, $444f4e45)             ; "DONE"
     }
 
     ; ---- the Toolbox's calls: they change d0-d2 and a0-a1, and Prog8 wants d2 kept ----
@@ -318,6 +324,86 @@ macos {
             move.l  macos.event+10,-(sp)
             pea     macos.limits
             dc.w    $a925                   ; _DragWindow
+            movem.l (sp)+,d0-d2/a0-a1
+            rts
+        }}
+    }
+
+    asmsub menu_select() -> long @D0 {
+        ; -- the menus, for a click in the menu bar: the menu's number in the upper half
+        ;    of what was chosen and the item's in the lower, 0 for nothing
+        %asm {{
+            movem.l d1-d2/a0-a1,-(sp)
+            clr.l   -(sp)
+            move.l  macos.event+10,-(sp)
+            dc.w    $a93d                   ; _MenuSelect
+            move.l  (sp)+,d0
+            movem.l (sp)+,d1-d2/a0-a1
+            rts
+        }}
+    }
+
+    asmsub menu_key(ubyte char @D0) -> long @D0 {
+        ; -- the same for a key that was pressed with the command key
+        %asm {{
+            movem.l d1-d2/a0-a1,-(sp)
+            clr.l   -(sp)
+            and.w   #$00ff,d0
+            move.w  d0,-(sp)
+            dc.w    $a93e                   ; _MenuKey
+            move.l  (sp)+,d0
+            movem.l (sp)+,d1-d2/a0-a1
+            rts
+        }}
+    }
+
+    asmsub menu_done() {
+        ; -- the menu's title is black for as long as its command takes
+        %asm {{
+            movem.l d0-d2/a0-a1,-(sp)
+            clr.w   -(sp)
+            dc.w    $a938                   ; _HiliteMenu
+            movem.l (sp)+,d0-d2/a0-a1
+            rts
+        }}
+    }
+
+    asmsub desk_accessory(uword item @D0) {
+        ; -- open the desk accessory that is an item of the Apple menu
+        %asm {{
+            movem.l d0-d2/a0-a1,-(sp)
+            move.l  macos.apple_menu,-(sp)
+            move.w  d0,-(sp)
+            pea     macos.accessory
+            dc.w    $a946                   ; _GetItem
+            clr.w   -(sp)
+            pea     macos.accessory
+            dc.w    $a9b6                   ; _OpenDeskAcc
+            addq.l  #2,sp
+            move.l  macos.window,-(sp)
+            dc.w    $a873                   ; _SetPort: the text goes to the program's window
+            movem.l (sp)+,d0-d2/a0-a1
+            rts
+        }}
+    }
+
+    asmsub front_window() -> long @D0 {
+        %asm {{
+            movem.l d1-d2/a0-a1,-(sp)
+            clr.l   -(sp)
+            dc.w    $a924                   ; _FrontWindow
+            move.l  (sp)+,d0
+            movem.l (sp)+,d1-d2/a0-a1
+            rts
+        }}
+    }
+
+    asmsub select_window() {
+        ; -- the window that was clicked in comes to the front
+        %asm {{
+            movem.l d0-d2/a0-a1,-(sp)
+            move.l  macos.found_window,-(sp)
+            dc.w    $a91f                   ; _SelectWindow
             movem.l (sp)+,d0-d2/a0-a1
             rts
         }}
@@ -549,8 +635,14 @@ macos {
 
     sub click() {
         when find_window() {
+            1 -> menu_choice(menu_select())
             2 -> system_click()
-            3 -> clicked = true
+            3 -> {
+                if found_window != front_window()
+                    select_window()
+                else
+                    clicked = true
+            }
             4 -> {
                 if found_window == window
                     drag_window()
@@ -563,11 +655,11 @@ macos {
     sub key() {
         ubyte char = lsb(event[2])
         if event[7] & $0100 != 0 {
-            ; with the command key: . and Q end the program
-            if char == '.' or char == 'q' or char == 'Q' {
-                echo_close()
-                exit_to_shell()
-            }
+            ; with the command key: a menu's command (Q is Quit); the period ends the
+            ; program too
+            if char == '.'
+                quit()
+            menu_choice(menu_key(char))
             return
         }
         ubyte after = (key_in + 1) & 31
@@ -575,6 +667,22 @@ macos {
             keys[key_in] = char
             key_in = after
         }
+    }
+
+    sub menu_choice(long choice) {
+        ; -- what was chosen from the menus: a desk accessory, or Quit
+        uword menu = msw(choice)
+        if menu == 1
+            desk_accessory(lsw(choice))
+        else if menu == 2
+            quit()
+        menu_done()
+    }
+
+    sub quit() {
+        ; -- the program ends here and now
+        echo_close()
+        exit_to_shell()
     }
 
     sub keypressed() -> bool {
@@ -613,13 +721,7 @@ macos {
             while key_in == key_out and not clicked
                 poll()
         }
-        if unattended {
-            ; (for what runs the machine to see that the program is done: the system's
-            ;  eight bytes for anybody's use, Scratch8)
-            echo_close()
-            pokel($09fa, $50385038)         ; "P8P8"
-            pokel($09fe, $444f4e45)         ; "DONE"
-        }
+        echo_close()
         exit_to_shell()
     }
 }

@@ -29,6 +29,27 @@ p8_sys_startup {
             clr.l   -(sp)
             dc.w    $a97b                   ; _InitDialogs
             dc.w    $a850                   ; _InitCursor
+            ; the menu bar: the Apple menu with the desk accessories, and File with Quit
+            clr.l   -(sp)
+            move.w  #1,-(sp)
+            pea     .apple(pc)
+            dc.w    $a931                   ; _NewMenu
+            move.l  (sp),macos.apple_menu
+            move.l  #'DRVR',-(sp)
+            dc.w    $a94d                   ; _AddResMenu
+            move.l  macos.apple_menu,-(sp)
+            clr.w   -(sp)
+            dc.w    $a935                   ; _InsertMenu
+            clr.l   -(sp)
+            move.w  #2,-(sp)
+            pea     .file(pc)
+            dc.w    $a931                   ; _NewMenu
+            move.l  (sp),-(sp)
+            pea     .quit(pc)
+            dc.w    $a933                   ; _AppendMenu
+            clr.w   -(sp)
+            dc.w    $a935                   ; _InsertMenu
+            dc.w    $a937                   ; _DrawMenuBar
             clr.l   -(sp)
             dc.w    $a8d8                   ; _NewRgn
             move.l  (sp)+,macos.region
@@ -79,6 +100,11 @@ p8_sys_startup {
             dbra    d0,.fill
             jsr     macos.echo_open
             rts
+.apple:     dc.b    1,$14
+.file:      dc.b    4,"File"
+.quit:      dc.b    6,"Quit/Q"
+            even
+            ; !notreached!
         }}
     }
 
