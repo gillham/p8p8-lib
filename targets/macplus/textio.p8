@@ -232,6 +232,21 @@ txt {
         macos.set_cell(col, row, char)
     }
 
+    sub setclr(ubyte col, ubyte row, ubyte color) {
+        ; -- the colour of a place: there are none here (as on the PET: for programs
+        ;    that are written for machines with colours too)
+    }
+
+    sub getclr(ubyte col, ubyte row) -> ubyte {
+        ; -- the colour of a place: always 1
+        return 1
+    }
+
+    sub setcc(ubyte col, ubyte row, ubyte char, ubyte charcolor) {
+        ; -- a character at a place; the colour is not used
+        macos.set_cell(col, row, char)
+    }
+
     sub getchr(ubyte col, ubyte row) -> ubyte {
         ; -- the character that is at a place
         return macos.screen[(row as uword) * macos.COLUMNS + col]
