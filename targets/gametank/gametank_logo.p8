@@ -1,3 +1,5 @@
+%import gametank
+
 gametank {
 %option merge    
     ubyte[] LogoXVals = [

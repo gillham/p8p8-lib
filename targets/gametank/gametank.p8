@@ -141,8 +141,23 @@ gametank {
             framebuffer_mem(0)
         }
 
+        ; Wait for the draw queue, in a program that has it (gametank_drawqueue.p8);
+        ; nothing at all in one that has not.
+        %asm {{
+            .weak
+draw_queue_await = 0
+            .endweak
+        }}
+        inline asmsub await_draw_queue_if_any() clobbers(A,X,Y) {
+            %asm {{
+                .if gametank.draw_queue_await != 0
+                jsr  gametank.draw_queue_await
+                .endif
+            }}
+        }
+
         sub direct_prepare_box_mode() {
-            ;await_draw_queue()  ; Make sure we don't intersect with the queued system.
+            await_draw_queue_if_any()   ; Make sure we don't intersect with the queued system.
             await_drawing()
             flagsMirror |= DMA_ENABLE | DMA_OPAQUE | DMA_IRQ | DMA_COLORFILL_ENABLE | DMA_OPAQUE
             dma_flags = flagsMirror

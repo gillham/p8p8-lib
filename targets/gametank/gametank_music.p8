@@ -19,6 +19,7 @@
 ; - The song that was playing is kept on a stack (REPEAT_RESUME, pause_music), as in
 ;   C.  When there is nothing to go back to the music stops.
 
+%import gametank
 %import gametank_audio
 
 gametank {

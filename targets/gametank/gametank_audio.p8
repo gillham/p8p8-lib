@@ -12,6 +12,7 @@
 ;
 ; The music player that uses this is in gametank_music.p8.
 
+%import gametank
 %import shared_compression
 
 gametank {

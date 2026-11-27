@@ -122,6 +122,16 @@ gametank {
         bool @shared draw_busy
         bool @shared frameflag
 
+        ; What a module that takes over the blitter's interrupt and the vsync interrupt
+        ; defines (gametank_drawqueue.p8): 0 means there is none, and the code for it
+        ; below is left out.
+        %asm {{
+            .weak
+draw_queue_irq = 0
+draw_queue_nmi = 0
+            .endweak
+        }}
+
 
         ; Virtual text screen.
         const uword Screen  = $0200
@@ -1028,11 +1038,17 @@ _out:
         cli             ; enable IRQs now
         rts
 _irq:
+        .if gametank.draw_queue_irq != 0
+        jmp  gametank.draw_queue_irq    ; the draw queue: it starts the next blit
+        .endif
         stz  gametank.draw_busy     ; signals draw queue is empty
         stz  gametank.blit_active   ; signals blitter completion irq fired.
         stz  gametank.BLIT_START    ; clear IRQ
         rti
 _vnmi:
+        .if gametank.draw_queue_nmi != 0
+        jmp  gametank.draw_queue_nmi    ; the draw queue: ram bank 1 may be there
+        .endif
         stz  gametank.frameflag     ; used by sdk await_vsync()
         inc  cbm.TIME_LO
         bne  +
