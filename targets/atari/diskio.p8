@@ -434,10 +434,19 @@ diskio {
     }
 
     sub rename(str oldfileptr, str newfileptr) {
-        ; -- rename a file ("D1:OLD.EXT,NEW.EXT" is what the DOS is given: the new name has no device)
+        ; -- rename a file ("D1:OLD.EXT,NEW.EXT" is what the DOS is given: the new name has no device.
+        ;    One that the new name comes with is left off: the DOS would read the name up to the colon
+        ;    and call the file "D1".)
         ubyte at = put_name(oldfileptr, device(oldfileptr))
         spec[at] = ','
-        at = put_name(newfileptr, at + 1)
+        ubyte k = 0
+        ubyte name_at = 0
+        while newfileptr[k] != 0 {
+            if newfileptr[k] == ':'
+                name_at = k + 1
+            k++
+        }
+        at = put_name(newfileptr + name_at, at + 1)
         spec[at] = $9b
         name_call(CIO_RENAME)
     }
