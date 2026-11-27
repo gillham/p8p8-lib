@@ -490,6 +490,12 @@ macos {
         uword at = (line as uword) * COLUMNS + col
         screen[at] = char
         attributes[at] = reverse as ubyte
+        if not plain(char) {
+            ; (it may draw nothing: what was there must not stay, as it would not
+            ; after the window is drawn again)
+            cell_rect(col, line, 1)
+            erase_rect()
+        }
         move_to(LEFT + (col as word) * CELL_WIDTH, TOP + ASCENT + (line as word) * CELL_HEIGHT)
         draw_char(char)
     }
@@ -559,8 +565,13 @@ macos {
             while start < COLUMNS {
                 ubyte kind = attributes[at + start]
                 ubyte end = start + 1
-                while end < COLUMNS and attributes[at + end] == kind
-                    end++
+                ; (a character that the font has no picture of takes no room: drawn
+                ; with others it would move what follows it to the left, so such a
+                ; one is drawn alone, at its own place)
+                if plain(screen[at + start]) {
+                    while end < COLUMNS and attributes[at + end] == kind and plain(screen[at + end])
+                        end++
+                }
                 if kind != 0
                     text_mode(4)
                 else
@@ -571,6 +582,11 @@ macos {
             }
         }
         set_reverse(reverse)
+    }
+
+    sub plain(ubyte char) -> bool {
+        ; -- one of the characters that every font has, each as wide as a cell
+        return char >= 32 and char < 127
     }
 
     sub chrout(ubyte char) {
