@@ -59,8 +59,9 @@ macos {
     ; the File Manager's calls take a parameter block: its result at 16, the name's
     ; address at 18, the volume at 22, the file's reference at 24, the permission at
     ; 27, a long of many uses at 28, the buffer at 32, how much is asked for at 36 and
-    ; how much it was at 40, the way to position at 44 and the position at 46.
-    uword[40] pb
+    ; how much it was at 40, the way to position at 44 and the position at 46.  (108
+    ; bytes: the longest that a call fills in, the catalog's information.)
+    uword[54] pb
 
     const ubyte F_OPEN = 0
     const ubyte F_CLOSE = 1
@@ -78,6 +79,11 @@ macos {
     const ubyte F_GETFPOS = 13
     const ubyte F_GETVOL = 14
     const ubyte F_OPENRF = 15
+    const ubyte F_HSETVOL = 16
+    const ubyte F_HGETVOL = 17
+    ; the calls of the hierarchical file system, for hfs_call
+    const ubyte H_DIRCREATE = 6
+    const ubyte H_GETCATINFO = 9
 
     asmsub file_call(ubyte function @D0) -> word @D0 {
         ; -- one of the File Manager's calls (the F_ numbers) with the parameter block
@@ -108,13 +114,28 @@ macos {
             dc.w    $a018,$4e75             ; _GetFPos
             dc.w    $a014,$4e75             ; _GetVol
             dc.w    $a00a,$4e75             ; _OpenRF
+            dc.w    $a215,$4e75             ; _HSetVol
+            dc.w    $a214,$4e75             ; _HGetVol
             ; !notreached!
+        }}
+    }
+
+    asmsub hfs_call(ubyte function @D0) -> word @D0 {
+        ; -- one of the hierarchical file system's calls (the H_ numbers), with macos.pb
+        %asm {{
+            movem.l d1-d2/a0-a1,-(sp)
+            lea     macos.pb,a0
+            and.l   #$000000ff,d0
+            dc.w    $a260                   ; _HFSDispatch
+            ext.l   d0
+            movem.l (sp)+,d1-d2/a0-a1
+            rts
         }}
     }
 
     sub clear_pb() {
         ubyte k
-        for k in 0 to 39
+        for k in 0 to 53
             pb[k] = 0
     }
 
