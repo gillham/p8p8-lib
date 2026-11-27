@@ -25,7 +25,7 @@
 ; each number, as in C.
 ;
 ; Different from C: rnd_range() works out its remainder unsigned, so high must
-; be more than low (p8c has no signed 16 bit remainder yet).
+; be more than low.  Then it gives what C's signed remainder gives.
 
 %import gametank
 
