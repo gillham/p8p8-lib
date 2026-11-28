@@ -26,7 +26,7 @@ is_library = 0
 ; and don't have rom_vectors or call init_system on entry
 ;
 .if is_library==1
-cartbank    = $fd17         ; banked "libraries" *should not* call cartbank
+cartbank    = $fd1c         ; banked "libraries" *should not* call cartbank
                             ; they should use a jsrfar type call
                             ; putting this here so libraries build
 *=prog8_program_start       ; allow %address to override
@@ -58,6 +58,10 @@ prog8_program_entry         ; needed by rom_vectors section
     ; reset stack pointer
     ldx  #$ff               ; init stack register
     txs
+
+    ; set via data direction pins to allow talking to the cartridge
+    lda  #%00000111         ; port A bits 0-2 out: bank clock, data, latch
+    sta  gametank.VIA1DDRA
 
     ; set cart bank here before we try to use $8000-$bfff
     lda  #$80

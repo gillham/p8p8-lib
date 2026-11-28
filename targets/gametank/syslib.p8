@@ -992,16 +992,13 @@ asmsub  init_system()  {
 ;        stz  gametank.BANKREG   ; default / zero banking?
 ;        sta  $1FFF              ; ?? write a signature again
 
-        ; don't need this right now as this is cartridge
-        ; bank control.  flat 32KB rom shouldn't need it.
-        ; setup VIA
+        ; cartridge bank control. enable output pins on VIA
+        ; done in startup.asm for now.
 ;        lda  #%00000111
-;        sta  gametank.VIA1DDRA  ; configure ???
+;        sta  gametank.VIA1DDRA
+        ; clear all pins to cart banking? (needs research)
 ;        lda  #$ff
-;        sta  gametank.VIA1PA1   ; configure ???
-;        lda  #$fd
-        ; jsr _bank_shift_out... somehow drive the shift register?
-        ; need to replicate this.  assuming default state might be ok?
+;        sta  gametank.VIA1PA1
 
         ; try to initialize video
         ; try to select output framebuffer
